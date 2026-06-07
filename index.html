@@ -1,0 +1,1203 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
+    <title>安监智能查询系统 · 完整六模块版</title>
+    <meta name="theme-color" content="#1a365d">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <link rel="manifest" href="manifest.json">
+
+    <!-- 边缘滑出退出提示 - 优先加载 -->
+    <script>
+    (function() {
+        'use strict';
+        // 退出提示 DOM 和样式创建（等待 DOM 加载完成后执行）
+        function initExitHint() {
+            // 注入退出提示样式
+            var s = document.createElement('style');
+            s.id = '_early_exit_style';
+            s.textContent = [
+                '#_exit_bar{',
+                '  position:fixed;bottom:0;left:0;right:0;',
+                '  background:rgba(26,54,93,0.96);color:#fff;',
+                '  text-align:center;padding:18px;font-size:1.05rem;font-weight:700;',
+                '  z-index:99998;transform:translateY(100%);',
+                '  transition:transform .3s ease;',
+                '  box-shadow:0 -2px 12px rgba(0,0,0,.25);letter-spacing:.5px;',
+                '  display:flex;align-items:center;justify-content:center;gap:10px;',
+                '}',
+                '#_exit_bar.show{transform:translateY(0);}',
+                '#_exit_bar ._exit_icon{font-size:1.3rem;}'
+            ].join('');
+            document.head.appendChild(s);
+
+            // 创建退出提示条
+            var bar = document.createElement('div');
+            bar.id = '_exit_bar';
+            bar.innerHTML = '<span class="_exit_icon">👆</span><span>再次滑入退出</span>';
+            document.body.appendChild(bar);
+
+            var _exitReady = false, _exitTimer = null;
+            var _popEnabled = false; // 是否启用退出检测
+
+            // 启用退出检测（用户首次交互后调用）
+            function enableExitDetection() {
+                if (_popEnabled) return;
+                _popEnabled = true;
+                history.pushState(null, null, location.href);
+
+                window.addEventListener('popstate', function(e) {
+                    if (!_popEnabled) return;
+
+                    if (_exitReady) {
+                        _exitReady = false;
+                        return; // 第二次：允许真正退出
+                    }
+                    // 第一次：显示退出提示
+                    bar.classList.add('show');
+                    _exitReady = true;
+                    if (_exitTimer) clearTimeout(_exitTimer);
+                    _exitTimer = setTimeout(function() {
+                        bar.classList.remove('show');
+                        _exitReady = false;
+                    }, 3000);
+                    history.pushState(null, null, location.href); // 恢复历史
+                });
+            }
+
+            // 页面加载后延迟 500ms 自动启用（覆盖大多数自动触发场景）
+            setTimeout(enableExitDetection, 500);
+
+            // 监听用户首次交互，提前启用
+            ['touchstart', 'click', 'keydown', 'focus'].forEach(function(evt) {
+                document.addEventListener(evt, enableExitDetection, { once: true, capture: true });
+            });
+
+            // 退出提示时隐藏（touch 事件触发 tab 切换时）
+            window._hideExitBar = function() {
+                if (bar.classList.contains('show')) {
+                    bar.classList.remove('show');
+                    _exitReady = false;
+                    if (_exitTimer) clearTimeout(_exitTimer);
+                }
+            };
+        }
+
+        // 如果 DOM 已就绪，立即执行；否则等待 DOMContentLoaded
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initExitHint);
+        } else {
+            initExitHint();
+        }
+    })();
+
+    <!-- 第三方库 (CDN) — 带 onerror 容错 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" onerror="console.warn('[CDN] xlsx 加载失败，导入/导出功能受限')"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js" onerror="console.warn('[CDN] pdf.js 加载失败，PDF预览功能受限')"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.4.2/mammoth.browser.min.js" onerror="console.warn('[CDN] mammoth 加载失败，Word解析功能受限')"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/fuse.js/6.6.2/fuse.min.js" onerror="console.warn('[CDN] fuse.js 加载失败，模糊搜索降级为普通搜索')"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pinyin/2.11.0/pinyin.min.js" onerror="console.warn('[CDN] pinyin 加载失败，拼音搜索不可用')"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js" onerror="console.warn('[CDN] jszip 加载失败，备份功能受限')"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xml-js/1.6.11/xml-js.min.js" onerror="console.warn('[CDN] xml-js 加载失败，XML转换功能受限')"></script>
+    <script src="https://cdn.jsdelivr.net/npm/html-docx-js@0.3.1/dist/html-docx.js" onerror="console.warn('[CDN] html-docx 加载失败，Word导出功能受限')"></script>
+
+    <!-- Modular CSS -->
+    <link rel="stylesheet" href="src/css/variables.css">
+    <link rel="stylesheet" href="src/css/layout.css">
+    <link rel="stylesheet" href="src/css/components.css">
+    <link rel="stylesheet" href="src/css/modules.css">
+    <link rel="stylesheet" href="src/css/responsive.css">
+</head>
+<body>
+    <header class="header">
+        <div class="header-inner">
+            <div class="logo">
+                <div class="logo-icon"><svg viewBox="0 0 100 100" style="width:100%;height:100%;"><defs>
+<linearGradient id="shieldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+<stop offset="0%" stop-color="#1a3a5c"/>
+<stop offset="50%" stop-color="#2563a8"/>
+<stop offset="100%" stop-color="#1e4d7b"/>
+</linearGradient>
+<linearGradient id="goldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+<stop offset="0%" stop-color="#ffd700"/>
+<stop offset="40%" stop-color="#ffec8b"/>
+<stop offset="60%" stop-color="#daa520"/>
+<stop offset="100%" stop-color="#b8860b"/>
+</linearGradient>
+<filter id="glow">
+<feGaussianBlur stdDeviation="2" result="blur"/>
+<feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+</filter>
+<filter id="shadow">
+<feDropShadow dx="1" dy="2" stdDeviation="2" flood-color="#000" flood-opacity="0.35"/>
+</filter>
+</defs>
+<path d="M50 5 L90 20 L90 50 Q90 75 50 95 Q10 75 10 50 L10 20 Z" fill="url(#shieldGrad)" stroke="#ffd700" stroke-width="1.5" filter="url(#shadow)"/>
+<path d="M50 12 L84 25 L84 49 Q84 70 50 87 Q16 70 16 49 L16 25 Z" fill="none" stroke="rgba(255,215,0,0.25)" stroke-width="0.8"/>
+<text x="52" y="50" text-anchor="middle" dominant-baseline="central" font-family="SimHei,'Microsoft YaHei',sans-serif" font-size="46" font-weight="900" fill="url(#goldGrad)" letter-spacing="3" filter="url(#glow)">铁</text></svg></div>
+                <div class="logo-text">
+                    <div class="logo-title">安监智能查询系统</div>
+                    <div class="logo-subtitle">SAFETY INSPECTION QUERY SYSTEM</div>
+                </div>
+            </div>
+            <!-- 移动端：当前tab名称 + 汉堡按钮 -->
+            <span class="nav-current-label" id="navCurrentLabel">📖 检查手册</span>
+            <button class="nav-toggle" id="navToggle" onclick="toggleNav()" aria-label="展开导航菜单">
+                <span></span><span></span><span></span>
+            </button>
+            <nav class="nav" id="mainNav">
+                <!-- 检查手册移到最前面 -->
+                <button class="nav-btn active" onclick="switchTab('handbook')" id="tab-handbook"><span>📖</span> 检查手册</button>
+                <button class="nav-btn" onclick="switchTab('issue')" id="tab-issue"><span>📊</span> 检查信息</button>
+                <button class="nav-btn" onclick="switchTab('rule')" id="tab-rule"><span>📋</span> 规章制度</button>
+                <button class="nav-btn" onclick="switchTab('diary')" id="tab-diary"><span>📝</span> 工作日志</button>
+                <button class="nav-btn" onclick="switchTab('phone')" id="tab-phone"><span>📞</span> 车站电话</button>
+                <button class="nav-btn" onclick="switchTab('doubao')" id="tab-doubao"><span>🤖</span> 智能助手</button>
+            </nav>
+        </div>
+    </header>
+
+    <main class="main">
+        <!-- 检查手册模块 (移最前，使用标准卡片样式) -->
+        <div id="panel-handbook" class="panel active">
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-title">
+                        <div class="card-title-icon">📖</div>
+                        安全检查手册
+                    </div>
+                    <div class="card-subtitle">分级浏览检查项点 · 快速定位关键环节</div>
+                </div>
+                <div class="card-body">
+                    <div class="stats-bar">
+                        <div class="stats-left">
+                            <div class="stat-item"><span class="stat-label">📚 条目总数</span><span class="stat-value" id="handbook-total">0</span></div>
+                            <div class="stat-item"><span class="stat-label">💾 存储</span><span class="stat-value" id="handbook-size">0 KB</span><div class="storage-bar"><div class="storage-fill" id="handbook-storageBar" style="width:0%"></div></div></div>
+                        </div>
+                        <div class="btn-group">
+                            <button class="btn btn-success" id="handbook-importBtn">📥 导入</button>
+                            <!-- 新增导出按钮 -->
+                            <button class="btn btn-primary" onclick="exportHandbook()">📤 导出</button>
+                            <button class="btn btn-info" onclick="resetHandbookData()">🔄 重置</button>
+                            <button class="btn btn-warning" onclick="clearHandbookData()">🗑️ 清空</button>
+                        </div>
+                    </div>
+
+                    <!-- 浏览模式切换 -->
+                    <div class="hb-view-toggle">
+                        <button class="active" id="hb-toggleSelect" onclick="hbSwitchView('select')">🏷️ 分级选择</button>
+                        <button id="hb-toggleOutline" onclick="hbSwitchView('outline')">📑 大纲浏览</button>
+                        <button id="hb-toggleRules" onclick="hbSwitchView('rules')">📜 规章制度</button>
+                    </div>
+
+                    <!-- 分级选择模式（原有） -->
+                    <div class="selector-panel" id="hb-selectPanel">
+                        <div class="selector-row">
+                            <div class="selector-item" id="system-selector">
+                                <label>选择系统专业</label>
+                                <select id="chapterSelect" onchange="onChapterChange()">
+                                    <option value="">-- 请选择系统专业 --</option>
+                                </select>
+                            </div>
+                            <div class="selector-item" id="category-selector" style="display: none;">
+                                <label>选择专业分类</label>
+                                <select id="sectionSelect" onchange="onSectionChange()">
+                                    <option value="">-- 请选择专业分类 --</option>
+                                </select>
+                            </div>
+                            <div class="selector-item" id="checkpoint-selector" style="display: none;">
+                                <label>选择检查项点</label>
+                                <select id="itemSelect" onchange="onItemChange()">
+                                    <option value="">-- 请选择检查项点 --</option>
+                                </select>
+                            </div>
+                            <div class="selector-item" id="subitem-selector" style="display: none;">
+                                <label>选择检查子项</label>
+                                <select id="subItemSelect" onchange="onSubItemChange()">
+                                    <option value="">-- 请选择检查子项 --</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 大纲浏览模式（新增） -->
+                    <div class="hb-outline-wrap" id="hb-outlineWrap">
+                        <div class="hb-outline-tree" id="hb-outlineTree">
+                            <div class="hb-content-placeholder" style="padding:30px 10px;">请先导入DOCX文档</div>
+                        </div>
+                        <div class="hb-outline-content" id="hb-outlineContent">
+                            <div class="hb-content-placeholder">← 点击左侧目录查看内容</div>
+                        </div>
+                    </div>
+
+                    <div id="contentDisplay" class="content-card" style="display: none;">
+                        <div class="content-header">
+                            <span class="content-chapter" id="displayChapter"></span>
+                            <span class="content-section" id="displaySection"></span>
+                            <span class="content-item" id="displayItem"></span>
+                            <span class="content-item" id="displaySubItem" style="background:linear-gradient(135deg,#e67e22,#f39c12);"></span>
+                        </div>
+                        <div class="content-body" id="displayContent"></div>
+                    </div>
+
+                    <input type="file" id="handbook-jsonFile" accept=".json,.docx,.doc" multiple style="display:none;">
+                </div>
+            </div>
+        </div>
+
+        <!-- 检查信息模块 (原第一，现第二) -->
+        <div id="panel-issue" class="panel">
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-title">
+                        <div class="card-title-icon">📊</div>
+                        检查信息查询
+                    </div>
+                    <div class="card-subtitle">多关键词定位 · 智能匹配快速检索</div>
+                </div>
+                <div class="card-body">
+                    <div class="stats-bar">
+                        <div class="stats-left">
+                            <div class="stat-item">
+                                <span class="stat-label">💾 存储:</span>
+                                <span class="stat-value" id="issue-storageText">计算中...</span>
+                                <div class="storage-bar"><div class="storage-fill" id="issue-storageBar" style="width:0%"></div></div>
+                            </div>
+                            <div class="stat-item">
+                                <span class="stat-label">记录数:</span>
+                                <span class="stat-value" id="issue-recordCount">0 条</span>
+                            </div>
+                        </div>
+                        <div class="btn-group">
+                            <button class="btn btn-success" onclick="issueImportFile()">📥 导入</button>
+                            <button class="btn btn-primary" onclick="issueExportJSON()">📤 导出</button>
+                            <button class="btn btn-info" onclick="issueDownloadTemplate()">📄 模板</button>
+                            <button class="btn btn-warning" onclick="issueShowClear()">🗑️ 清空</button>
+                        </div>
+                    </div>
+                    <input type="file" id="issue-fileInput" accept=".xlsx,.xls,.json" style="display:none;">
+                    
+                    <div class="search-box">
+                        <div id="issue-keywordContainer" class="keyword-list"></div>
+                        <button class="btn-add" id="issue-btnAdd" onclick="issueAddKeyword()">+ 添加关键词 (最多4个)</button>
+                        <div class="search-actions">
+                            <button class="btn btn-primary btn-lg" onclick="issueDoSearch()">🔍 智能搜索</button>
+                            <button class="btn btn-secondary btn-lg" onclick="issueClearSearch()">重置</button>
+                        </div>
+                    </div>
+                    
+                    <div id="issue-statsBar" class="results-stats" style="display:none;">
+                        <div class="results-stats-left">
+                            <span>高匹配(≥75%): <span class="stat-highlight" id="issue-highMatchCount">0</span> 条</span>
+                            <span class="stat-muted" id="issue-lowMatchInfo" style="display:none;">(低匹配&lt;75%: <span id="issue-lowMatchCount" style="color:var(--accent);">0</span> 条隐藏)</span>
+                        </div>
+                        <button class="btn btn-secondary" id="issue-toggleLowMatchBtn" onclick="issueToggleLowMatch()" style="display:none;">📊 低匹配结果</button>
+                    </div>
+                    
+                    <div id="issue-results"></div>
+                    <div id="issue-lowMatchResults" style="display:none;"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 规章制度模块 (不变) -->
+        <div id="panel-rule" class="panel">
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-title">
+                        <div class="card-title-icon">📋</div>
+                        规章制度查询
+                    </div>
+                    <div class="card-subtitle">规章一站式管理 · 智能检索精准定位</div>
+                </div>
+                <div class="card-body">
+                    <div class="control-bar stats-bar">
+                        <div class="control-stats stats-left">
+                            <span class="control-label">📚</span>
+                            <span class="control-value stat-value" id="rule-totalBadge" style="cursor:pointer;">0 条</span>
+                            <span class="control-divider">|</span>
+                            <span class="control-label">💾</span>
+                            <div class="storage-bar-mini storage-bar"><div class="storage-fill" id="rule-storageBar" style="width:0%"></div></div>
+                            <span class="control-value-small stat-value" id="rule-storageText">0/500MB</span>
+                        </div>
+                        <div class="control-btns btn-group">
+                            <button class="btn btn-import btn-success" id="rule-importBtn">📥 导入</button>
+                            <button class="btn btn-export btn-primary" id="rule-exportBtn">📤 导出</button>
+                            <button class="btn btn-catalog btn-info" id="rule-catalogBtn">🗂️ 目录</button>
+                            <button class="btn btn-clear btn-warning" id="rule-clearBtn">🗑️ 清空</button>
+                        </div>
+                    </div>
+
+                    <div class="form-group" style="margin-top:16px;">
+                        <label class="form-label">选择专业</label>
+                        <select id="rule-tradeSelect" class="form-select">
+                            <option value="">全部专业</option>
+                        </select>
+                    </div>
+
+                    <div class="search-box">
+                        <div id="rule-keywordContainer" class="keyword-list"></div>
+                        <button class="btn-add" id="rule-btnAdd">+ 添加关键词 (最多4个)</button>
+                        
+
+                        
+                        <div class="search-actions">
+                            <button class="btn btn-primary btn-lg" id="rule-searchBtn">🔍 智能搜索</button>
+                            <button class="btn btn-secondary btn-lg" id="rule-clearSearchBtn">重置</button>
+                        </div>
+                    </div>
+
+                    <input type="file" id="rule-fileInput" accept=".pdf,.doc,.docx,.json,.zip" style="display:none;" multiple>
+
+                    <div class="results-header" style="display: none;">
+                        <span class="results-title">📋 查询结果</span>
+                        <span class="results-count" id="rule-resultCount">0 项</span>
+                    </div>
+
+                    <div id="rule-resultsList" style="display: none;"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 工作日志模块 -->
+        <div id="panel-diary" class="panel">
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-title">
+                        <div class="card-title-icon">📝</div>
+                        工作日志
+                    </div>
+                    <div class="card-subtitle">日志备忘电子化 · 记录提醒两不误</div>
+                </div>
+                <div class="card-body">
+                    <!-- 统计栏+按钮组（重新布局） -->
+                    <div class="stats-bar">
+                        <div class="stats-left">
+                            <div class="stat-item">
+                                <span class="stat-label">📝 记录数:</span>
+                                <span class="stat-value" id="diary-count">0 条</span>
+                            </div>
+                        </div>
+                        <div class="btn-group" id="diary-btn-group">
+                            <button class="btn btn-secondary" id="diary-input-btn" onclick="clearDiaryForm(); showInputView();">✏️ 输入</button>
+                            <button class="btn btn-info" id="diary-history-btn" onclick="showQuery()">🔍 查询</button>
+                            <button class="btn btn-success" onclick="openMemoModal()">🔔 备忘</button>
+                            <button class="btn btn-primary" onclick="importDiary()">📥 导入</button>
+                            <button class="btn btn-warning" onclick="exportDiary()">📤 导出</button>
+                        </div>
+                    </div>
+
+                    <!-- 查询视图：日历 + 日期详情 -->
+                    <div id="diary-history-view" class="diary-view-panel" style="display:none;">
+                        <div class="diary-view-header">
+                            <span class="diary-view-title">📅 历史查询</span>
+                        </div>
+                        <div id="diary-calendar" class="diary-calendar"></div>
+                        <div id="diary-date-detail" class="diary-date-detail" style="display:none;"></div>
+                    </div>
+
+                    <!-- 输入视图：日期 + 工作内容 + 问题输入（默认显示） -->
+                    <div id="diary-input-view" class="diary-view-panel">
+                        <div class="diary-view-header">
+                            <span class="diary-view-title">✏️ 输入内容</span>
+                            <div style="display:flex;gap:6px;align-items:center;">
+                                <button class="btn btn-primary btn-small" onclick="saveDiary(this)">💾 保存</button>
+                                <button class="btn btn-secondary btn-small" onclick="copyAllToday(this)">📄 全部复制</button>
+                                <button class="btn btn-accent" onclick="toggleMultimediaPanel()" id="btn-multimedia-toggle" style="background:#d97706;color:white;">📸 多媒体录入</button>
+                            </div>
+                        </div>
+                        <!-- 日期选择（仅输入视图显示） -->
+                        <div class="diary-date-row">
+                            <label>📅 日期:</label>
+                            <input type="date" id="diary-date">
+                        </div>
+                        <!-- 多媒体录入面板 -->
+                        <div id="multimedia-panel" style="display:none; padding:12px; background:#f8fafc; border-radius:8px; margin-bottom:16px;">
+                            <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:8px;">
+                                <!-- 拍照 -->
+                                <label class="btn btn-info" style="cursor:pointer; display:flex; align-items:center; gap:4px;">
+                                    📷 拍照
+                                    <input type="file" accept="image/*" capture="environment" id="camera-input" onchange="handleMediaCapture(this, 'photo')" hidden>
+                                </label>
+                                <!-- 录像 -->
+                                <label class="btn btn-info" style="cursor:pointer; display:flex; align-items:center; gap:4px;">
+                                    🎥 录像
+                                    <input type="file" accept="video/*" capture="environment" id="video-input" onchange="handleMediaCapture(this, 'video')" hidden>
+                                </label>
+                            </div>
+                            <div style="font-size:0.8rem; color:#64748b; margin-bottom:8px;">💡 内容将插入到光标所在的文本框（可使用输入法自带的语音输入 🎤）</div>
+                            <!-- 多媒体预览区 -->
+                            <div id="media-preview" style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:8px;"></div>
+                            <!-- 关闭按钮 -->
+                            <div style="display:flex; gap:8px;">
+                                <button class="btn btn-secondary" onclick="closeMultimediaPanel()">❌ 关闭</button>
+                            </div>
+                        </div>
+                        <div class="diary-section">
+                            <div class="diary-section-title">📋 工作内容</div>
+                            <textarea id="diary-work" class="diary-textarea" placeholder="请输入工作内容..." oninput="autoResize(this)"></textarea>
+                        </div>
+                        <div class="diary-section">
+                            <div class="diary-section-title">⚠️ 检查发现问题</div>
+                            <div id="diary-issues-container"></div>
+                            <button class="btn-add-issue" id="btn-add-issue" onclick="addIssueField()">+ 添加问题</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 车站电话模块 (不变) -->
+        <div id="panel-phone" class="panel">
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-title">
+                        <div class="card-title-icon">📞</div>
+                        车站电话
+                    </div>
+                    <div class="card-subtitle">铁路通讯录查询 · 一键快速拨号</div>
+                </div>
+                <div class="card-body">
+                    <div class="stats-bar">
+                        <div class="stats-left">
+                            <div class="stat-item">
+                                <span class="stat-label">💾 存储:</span>
+                                <span class="stat-value" id="phone-storageText">0 MB</span>
+                                <div class="storage-bar"><div class="storage-fill" id="phone-storageBar" style="width:0%"></div></div>
+                            </div>
+                            <div class="stat-item">
+                                <span class="stat-label">记录数:</span>
+                                <span class="stat-value" id="phone-recordCount">0 条</span>
+                            </div>
+                        </div>
+                        <div class="btn-group">
+                            <button class="btn btn-success" onclick="document.getElementById('phone-fileInput').click()">📥 导入</button>
+                            <button class="btn btn-primary" onclick="phoneExportJSON()">📤 导出</button>
+                            <button class="btn btn-info" onclick="phoneDownloadTemplate()">📄 模板</button>
+                            <button class="btn btn-warning" onclick="phoneShowClear()">🗑️ 清空</button>
+                        </div>
+                    </div>
+                    <input type="file" id="phone-fileInput" accept=".xlsx,.xls,.json" style="display:none;">
+
+                    <div class="search-box">
+                        <div class="phone-search-bar">
+                            <input type="text" id="phone-searchInput" placeholder="输入站名、单位或线名">
+                            <button class="btn btn-primary btn-lg" onclick="phoneDoSearch()">🔍 搜索</button>
+                            <button class="btn btn-secondary btn-lg" onclick="phoneClearSearch()">重置</button>
+                        </div>
+                    </div>
+
+                    <div class="results-header">
+                        <span class="results-title">📞 查询结果</span>
+                        <span class="results-count" id="phone-resultCount">0 条</span>
+                    </div>
+
+                    <div id="phone-results" class="result-list" style="display:none;"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 智能查询模块 -->
+        <div id="panel-doubao" class="panel">
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-title">
+                        <div class="card-title-icon">🤖</div>
+                         智能助手
+                    </div>
+                    <div class="card-subtitle"> 本地数据联动 ·支持智能对规、对话、写作</div>
+                </div>
+                <div class="card-body" style="display:flex;flex-direction:column;gap:0;position:relative;min-height:0;">
+
+                    <!-- 操作栏：API 配置 + 备份/导入 + 状态 -->
+                    <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px;flex-wrap:wrap;">
+                        <div style="display:flex;gap:8px;">
+                            <button id="ds-api-config-btn" style="padding:6px 14px;background:var(--primary);color:#fff;border:none;border-radius:8px;font-size:0.85rem;cursor:pointer;font-weight:600;">⚙️ API 配置</button>
+                            <button id="global-backup-btn" style="padding:6px 14px;background:#059669;color:#fff;border:none;border-radius:8px;font-size:0.85rem;cursor:pointer;">📦 备份</button>
+                            <button id="global-restore-btn" style="padding:6px 14px;background:#d97706;color:#fff;border:none;border-radius:8px;font-size:0.85rem;cursor:pointer;">📂 导入</button>
+                        </div>
+                        <div id="ds-api-status-badge" style="display:flex;align-items:center;gap:8px;">
+                            <span id="ds-api-status-icon" style="font-size:0.85rem;">⚪</span>
+                            <span id="ds-api-status-text" style="font-size:0.8rem;color:var(--text-secondary);">未配置 API</span>
+                        </div>
+                    </div>
+
+                    <!-- API 配置模态框 -->
+                    <div id="api-config-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:11200;align-items:center;justify-content:center;">
+                        <div class="modal-content" style="background:#fff;border-radius:14px;padding:20px;width:min(500px,95vw);max-height:85vh;overflow-y:auto;display:flex;flex-direction:column;">
+                            <div class="modal-header" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-shrink:0;">
+                                <span style="font-weight:700;font-size:0.97rem;color:var(--primary);">🔧 大模型 API 配置</span>
+                                <button onclick="document.getElementById('api-config-modal').style.display='none'" style="background:none;border:none;cursor:pointer;font-size:1.2rem;color:#888;">✕</button>
+                            </div>
+                            <div class="modal-body" style="overflow-y:auto;flex:1;padding:0 2px 0 0;">
+                                <div style="display:flex;flex-direction:column;gap:16px;">
+                                <div><label style="font-weight:600;display:block;margin-bottom:6px;">API 地址 <span style="color:#e53e3e;">*</span></label><input type="text" id="modal-apiurl" style="width:100%;padding:8px 12px;border:1px solid var(--border);border-radius:6px;font-size:0.9rem;" placeholder="https://api.deepseek.com/chat/completions" value="https://api.deepseek.com/chat/completions"><div style="font-size:0.7rem;color:#718096;margin-top:4px;">支持 OpenAI 格式（DeepSeek、OpenAI、通义千问等）</div></div>
+                                <div><label style="font-weight:600;display:block;margin-bottom:6px;">模型名称 <span style="color:#e53e3e;">*</span></label><input type="text" id="modal-model" style="width:100%;padding:8px 12px;border:1px solid var(--border);border-radius:6px;font-size:0.9rem;" placeholder="deepseek-chat" value="deepseek-chat"></div>
+                                <div><label style="font-weight:600;display:block;margin-bottom:6px;">API Key <span style="color:#e53e3e;">*</span></label><input type="password" id="modal-apikey" style="width:100%;padding:8px 12px;border:1px solid var(--border);border-radius:6px;font-size:0.9rem;" placeholder="sk-..."><div style="font-size:0.7rem;color:#718096;margin-top:4px;">请前往模型平台获取（如 platform.deepseek.com）</div></div>
+                                <details style="background:#f8fafc;border-radius:8px;padding:8px 12px;border:1px solid #e2e8f0;">
+                                    <summary style="font-weight:600;cursor:pointer;color:var(--primary);">📘 如何注册并获取 API Key？</summary>
+                                    <div style="margin-top:10px;font-size:0.8rem;line-height:1.6;color:var(--text);">
+                                        <p><strong>推荐使用 DeepSeek（性价比高，国内可用）：</strong></p>
+                                        <ol style="margin-left:20px;padding-left:0;">
+                                            <li>访问 <a href="https://platform.deepseek.com/" target="_blank" style="color:var(--info);">https://platform.deepseek.com/</a> 注册账号。</li>
+                                            <li>登录后进入「API Keys」页面，点击「创建 API Key」。</li>
+                                            <li>复制生成的 Key（格式：sk-xxxxxxxx），粘贴到上方输入框。</li>
+                                            <li>API 地址和模型名称保持默认，点击「保存」即可。</li>
+                                        </ol>
+                                        <p><strong>其他兼容平台：</strong></p>
+                                        <ul style="margin-left:20px;">
+                                            <li>OpenAI: <code>https://api.openai.com/v1/chat/completions</code>，模型 <code>gpt-3.5-turbo</code></li>
+                                            <li>通义千问: <code>https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions</code>，模型 <code>qwen-turbo</code></li>
+                                            <li>智谱: <code>https://open.bigmodel.cn/api/paas/v4/chat/completions</code>，模型 <code>glm-4</code></li>
+                                        </ul>
+                                        <p style="margin-top:8px;">💡 配置保存后立即生效。如需切回豆包网页版，点击「清除配置」。</p>
+                                    </div>
+                                </details>
+                                <div style="background:#f0fdf4;border:1px solid #86efac;border-radius:8px;padding:8px 12px;font-size:0.75rem;color:#166534;">💡 保存后立即启用本地智能助手，清除配置则返回豆包网页版。</div>
+                                </div>
+                            </div>
+                            <div class="modal-footer" style="display:flex;gap:8px;margin-top:14px;justify-content:flex-end;flex-wrap:wrap;flex-shrink:0;">
+                                <button onclick="document.getElementById('api-config-modal').style.display='none'" style="padding:8px 16px;border:1px solid var(--border);border-radius:8px;background:#f8fafc;font-size:0.85rem;cursor:pointer;">取消</button>
+                                <button id="modal-reset-default" style="padding:8px 16px;border:1px solid #93c5fd;border-radius:8px;background:#eff6ff;color:#1d4ed8;font-size:0.85rem;cursor:pointer;">🔄 恢复默认</button>
+                                <button id="modal-clear-key" style="padding:8px 16px;border:1px solid #fca5a5;border-radius:8px;background:#fef2f2;color:#dc2626;font-size:0.85rem;cursor:pointer;">🗑️ 清除</button>
+                                <button id="modal-save-config" style="padding:8px 20px;background:var(--primary);color:#fff;border:none;border-radius:8px;font-size:0.85rem;font-weight:600;cursor:pointer;">💾 保存</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 豆包网页版嵌入（API未配置时显示） -->
+                    <div id="doubao-webview" style="display:flex;flex-direction:column;min-height:500px;border-radius:12px;overflow:hidden;border:1px solid var(--border);">
+                        <iframe src="https://www.doubao.com/chat/" style="width:100%;height:70vh;border:none;" title="豆包网页版"></iframe>
+                        <div style="text-align:center;padding:8px;font-size:0.75rem;color:var(--text-secondary);background:#f8fafc;">
+                            ⚠️ 豆包网页版为第三方服务。如需使用本地智能助手，请<button id="quick-config-btn" style="background:var(--primary);color:#fff;border:none;border-radius:12px;padding:2px 10px;margin:0 4px;cursor:pointer;font-size:0.75rem;">点击配置 API Key</button>。
+                        </div>
+                    </div>
+
+                    <!-- 子模块切换按钮 -->
+                    <div id="ds-sub-tabs" style="display:flex;gap:6px;margin-bottom:12px;">
+                        <button id="ds-sub-btn-chat" onclick="dsSwitchSub('chat')"
+                            style="flex:1;padding:10px 18px;border:2px solid #3b82f6;border-radius:var(--radius-md);background:#3b82f6;color:#fff;font-size:0.875rem;font-weight:600;cursor:pointer;transition:all 0.2s;display:flex;align-items:center;justify-content:center;gap:6px;">
+                            💬 智能对话
+                        </button>
+                        <button id="ds-sub-btn-check" onclick="dsSwitchSub('check')"
+                            style="flex:1;padding:10px 18px;border:2px solid var(--border);border-radius:var(--radius-md);background:#f8fafc;color:var(--text);font-size:0.875rem;font-weight:600;cursor:pointer;transition:all 0.2s;display:flex;align-items:center;justify-content:center;gap:6px;">
+                            ⚖️ 智能对规
+                        </button>
+                        <button id="ds-sub-btn-writer" onclick="dsSwitchSub('writer')"
+                            style="flex:1;padding:10px 18px;border:2px solid var(--border);border-radius:var(--radius-md);background:#f8fafc;color:var(--text);font-size:0.875rem;font-weight:600;cursor:pointer;transition:all 0.2s;display:flex;align-items:center;justify-content:center;gap:6px;">
+                            ✍️ 智能写作
+                        </button>
+                    </div>
+
+                    <!-- === 智能对规子模块 === -->
+                    <div id="ds-sub-check" style="display:none;flex-direction:column;flex:1;min-height:0;">
+                        <!-- 自动对规模块 -->
+                        <div style="background: linear-gradient(135deg, #e0f2fe, #e6f7ff); border-radius: 12px; padding: 16px; flex:1; overflow-y:auto;">
+                            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px;">
+                                <span style="font-size: 1.2rem;">⚖️</span>
+                                <span style="font-weight: 600; color: var(--primary);">智能对规</span>
+                                <span style="font-size: 0.75rem; background: #fff; padding: 2px 8px; border-radius: 20px; color: var(--info);">Beta</span>
+                            </div>
+                            <textarea id="autoCheck-input" rows="2" placeholder="输入检查问题，例如：工务作业人员在天窗点外违规上道作业，未设置防护。"
+                                style="width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; font-size: 0.9rem; resize: none; margin-bottom: 10px; box-sizing: border-box; min-height: 40px; max-height: 200px; line-height: 1.5;"
+                                oninput="autoResize(this);acOnInputChange(this.value)"></textarea>
+                            
+                            <!-- 关键词选择区域 -->
+                            <div id="keyword-select-area" style="display:none;margin-bottom:12px;padding:12px;background:#fff;border-radius:8px;border:1px dashed var(--primary);">
+                                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+                                    <span style="font-size:0.85rem;font-weight:600;color:var(--primary);">🎯 点击候选词选中，再次点击取消</span>
+                                    <span id="keyword-select-count" style="font-size:0.75rem;color:var(--text-secondary);">已选: 0/4</span>
+                                </div>
+                                
+                                <!-- 候选关键词上栏 -->
+                                <div style="margin-bottom:8px;">
+                                    <div style="font-size:0.75rem;color:var(--text-secondary);margin-bottom:6px;">候选词（词库匹配，点击选中）：</div>
+                                    <div id="keyword-candidate-list" style="display:flex;flex-wrap:wrap;gap:8px;min-height:40px;padding:8px;background:#f8fafc;border-radius:6px;border:1px solid #e2e8f0;">
+                                    </div>
+                                </div>
+                                
+                                <!-- 添加自定义关键词 -->
+                                <div style="display:flex;gap:8px;margin-bottom:12px;">
+                                    <input type="text" id="keyword-custom-input" placeholder="输入自定义关键词..." 
+                                        style="flex:1;padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:0.85rem;"
+                                        onkeypress="if(event.key==='Enter')acAddCustomKeyword()">
+                                    <button class="btn btn-small" onclick="acAddCustomKeyword()" style="white-space:nowrap;">➕ 添加</button>
+                                </div>
+                                
+                                <!-- 已选择关键词下栏 -->
+                                <div style="margin-bottom:8px;">
+                                    <div style="font-size:0.75rem;color:var(--text-secondary);margin-bottom:6px;">已选择（点击取消）：</div>
+                                    <div id="keyword-selected-list" 
+                                        style="display:flex;flex-wrap:wrap;gap:8px;min-height:48px;padding:10px;background:linear-gradient(135deg, #e0f2fe, #e6f7ff);border-radius:6px;border:2px dashed var(--info);">
+                                    </div>
+                                </div>
+                                
+                                <div style="padding:6px 8px;background:#f8fafc;border-radius:6px;font-size:0.75rem;color:var(--text-secondary);">
+                                    💡 点击候选词选中/取消，或点击"➕"添加自定义词，然后点击「本地匹配」开始搜索。
+                                </div>
+                            </div>
+                            
+                            <div style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center;">
+                                <!-- 两态合并按钮：第一次=本地匹配，第二次=AI对规 -->
+                                <button class="btn btn-primary" id="autoCheck-smartBtn" style="flex: 1; font-weight: 600;">🔍 本地匹配</button>
+                                <button class="btn btn-warning" id="autoCheck-importBtn" style="flex: 1;" onclick="importRailwayTerms()">📚 导入词库</button>
+                                <button class="btn btn-success" id="autoCheck-exportBtn" style="flex: 1;" onclick="exportRailwayTerms()">📤 导出词库</button>
+                                <button class="btn btn-secondary" id="autoCheck-clearBtn" style="flex: 1;">🔄 重置</button>
+                            </div>
+                            <!-- 本地匹配后提示必须先AI对规 -->
+                            <div id="autoCheck-ai-hint" style="display:none;margin-top:6px;padding:6px 12px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:6px;font-size:0.78rem;color:#1d4ed8;text-align:center;">
+                                ⚠️ 本地匹配已完成，请点击「AI 对规」获取智能分析结果，方可进行下一次匹配
+                            </div>
+                            <div id="autoCheck-results" style="margin-top: 16px; max-height: 500px; min-height: 200px; overflow-y: auto; display: none;">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- === 智能对话子模块 === -->
+                    <div id="ds-sub-chat" style="display:flex;flex-direction:column;min-width:0;flex:1;min-height:0;">
+                        <!-- 对话区折叠按钮栏（参考DeepSeek布局） -->
+                        <div style="display:flex;align-items:center;justify-content:space-between;padding:6px 0;border-top:1px solid var(--border);margin-top:4px;">
+                            <button id="ds-sidebar-toggle-btn" onclick="dsToggleSidebar()"
+                                style="display:inline-flex;align-items:center;gap:5px;padding:5px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:#f8fafc;color:var(--text);font-size:0.82rem;cursor:pointer;white-space:nowrap;transition:all 0.2s;"
+                                onmouseover="this.style.background='var(--primary-light)';this.style.borderColor='var(--primary)'"
+                                onmouseout="this.style.background='#f8fafc';this.style.borderColor='var(--border)'">
+                                <span id="ds-sidebar-toggle-icon">☰</span>
+                                <span id="ds-sidebar-toggle-text">📋 历史记录</span>
+                            </button>
+                            <span style="font-size:0.78rem;color:var(--text-secondary);">💬 DeepSeek 对话</span>
+                        </div>
+                        <!-- 对话区 -->
+                        <div id="ds-chat-box" style="display:none;overflow-y:auto;border:1px solid var(--border);border-radius:var(--radius);padding:14px;background:#f8fafc;flex-direction:column;gap:10px;flex:1;min-height:200px;max-height:calc(100vh - 360px);"></div>
+                        <!-- ========== 智能助手增强工具栏 ========== -->
+                        <div id="agent-toolbar" style="margin-bottom: 12px; padding: 8px; background: #f8fafc; border-radius: 12px; border: 1px solid #e2e8f0; display: flex; flex-wrap: wrap; align-items: center; gap: 10px;">
+                          <select id="expertRole" style="background: white; border: 1px solid #cbd5e1; border-radius: 20px; padding: 5px 12px; font-size: 0.85rem;">
+                            <option value="">🧑‍💼 通用</option>
+                            <option value="dianwu">⚡ 电务安全监察</option>
+                            <option value="gongwu">🛤️ 工务安全监察</option>
+                            <option value="gongdian">🔌 供电安全监察</option>
+                            <option value="chewu">🚂 车务安全监察</option>
+                            <option value="jiwu">🚄 机务安全监察</option>
+                            <option value="cheliang">🚃 车辆安全监察</option>
+                            <option value="tongxin">📡 通信安全监察</option>
+                            <option value="fangjian">🏗️ 房建安全监察</option>
+                            <option value="huoyun">📦 货运安全监察</option>
+                            <option value="tongyong">🛡️ 综合安全监察</option>
+                            <option value="frontend">💻 前端工程师</option>
+                          </select>
+                          <label style="display: inline-flex; align-items: center; gap: 4px; font-size: 0.8rem;">
+                            <input type="checkbox" id="memoryEnable" checked> 🧠 长期记忆
+                          </label>
+                          <label style="display: inline-flex; align-items: center; gap: 4px; font-size: 0.8rem;">
+                            <input type="checkbox" id="webSearchEnable"> 🌐 联网搜索
+                          </label>
+                          <div style="flex:1"></div>
+                          <button id="statsBtn" style="background: #e2e8f0; border: none; border-radius: 16px; padding: 4px 10px; font-size: 0.7rem; cursor: pointer;">📊 统计</button>
+                          <button id="ds-reset-datasource" style="background: #f0fdf4; border: 1px solid #86efac; border-radius: 16px; padding: 4px 10px; font-size: 0.7rem; cursor: pointer; color: #15803d;">🔄 数据源</button>
+                        </div>
+                        <div id="statsPanel" style="display: none; position: absolute; background: white; border: 1px solid #ccc; border-radius: 8px; padding: 8px; font-size: 0.75rem; z-index: 100; min-width: 150px; margin-top: 4px;"></div>
+                        <!-- 输入区 -->
+                        <div style="display:flex;gap:8px;margin-top:10px;align-items:flex-end;">
+                            <textarea id="ds-user-input" rows="2" placeholder="输入问题，按 Ctrl+Enter 或点击发送..." oninput="autoResize(this)"
+                                style="flex:1;padding:10px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:0.95rem;resize:none;line-height:1.5;max-height:120px;"></textarea>
+                            <div style="display:flex;flex-direction:column;gap:4px;">
+                                <button onclick="dsSendMsg()" id="ds-send-btn" class="btn btn-primary" style="width:36px;height:32px;padding:0;display:flex;align-items:center;justify-content:center;" title="发送消息">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:block;">
+                                        <path d="M12 19V5"/>
+                                        <path d="M5 12l7-7 7 7"/>
+                                    </svg>
+                                </button>
+                                <input type="file" id="ds-attach-file" multiple accept=".txt,.md,.doc,.docx,.xls,.xlsx,.pdf,.csv,.json"
+                                    style="display:none;" onchange="dsHandleAttach(this)">
+                                <button onclick="document.getElementById('ds-attach-file').click()" class="btn btn-secondary btn-small" style="width:36px;height:32px;padding:0;display:flex;align-items:center;justify-content:center;font-size:1.4rem;" title="添加文件（TXT/MD/DOC/DOCX/XLS/XLSX/PDF/CSV/JSON）">+</button>
+                            </div>
+                        </div>
+                        <!-- 已附加文件标签（已移除，改为直接显示在输入框中） -->
+                    </div>
+                    <!-- 数据源选择弹窗 -->
+                    <div id="ds-datasource-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:11100;align-items:center;justify-content:center;">
+                        <div style="background:#fff;border-radius:14px;padding:20px;width:min(400px,95vw);max-height:85vh;overflow-y:auto;">
+                            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+                                <span style="font-weight:700;font-size:0.97rem;color:var(--primary);">🔗 选择本次使用的数据源</span>
+                                <button onclick="var m=document.getElementById('ds-datasource-modal');m.style.display='none';m.querySelector('#ds-dialog-confirm')._reject&&m.querySelector('#ds-dialog-confirm')._reject();" style="background:none;border:none;cursor:pointer;font-size:1.2rem;color:#888;">✕</button>
+                            </div>
+                            <div style="display:flex;flex-direction:column;gap:10px;">
+                                <label style="display:flex;align-items:center;gap:8px;cursor:pointer;"><input type="checkbox" id="ds-dialog-rules" value="rules" checked> 📋 规章制度</label>
+                                <label style="display:flex;align-items:center;gap:8px;cursor:pointer;"><input type="checkbox" id="ds-dialog-issue" value="issue" checked> 📊 检查台账</label>
+                                <label style="display:flex;align-items:center;gap:8px;cursor:pointer;"><input type="checkbox" id="ds-dialog-handbook" value="handbook"> 📖 检查手册</label>
+                                <label style="display:flex;align-items:center;gap:8px;cursor:pointer;"><input type="checkbox" id="ds-dialog-wr-all" value="wr_all"> ✍️ 智能写作资料</label>
+                                <label style="display:flex;align-items:center;gap:8px;cursor:pointer;"><input type="checkbox" id="ds-dialog-phone" value="phone"> 📞 车站电话</label>
+                                <label style="display:flex;align-items:center;gap:8px;cursor:pointer;"><input type="checkbox" id="ds-dialog-diary" value="diary"> 📝 工作日志</label>
+                                <hr style="margin:4px 0;">
+                                <label style="display:flex;align-items:center;gap:8px;cursor:pointer;"><input type="checkbox" id="ds-dialog-remember" checked> ✅ 记住此次选择</label>
+                            </div>
+                            <div style="display:flex;gap:10px;margin-top:14px;justify-content:flex-end;">
+                                <button onclick="var m=document.getElementById('ds-datasource-modal');m.style.display='none';m.querySelector('#ds-dialog-confirm')._reject&&m.querySelector('#ds-dialog-confirm')._reject();" style="padding:8px 16px;border:1px solid var(--border);border-radius:8px;background:#f8fafc;font-size:0.85rem;cursor:pointer;">取消</button>
+                                <button id="ds-dialog-confirm" style="padding:8px 20px;background:var(--primary);color:#fff;border:none;border-radius:8px;font-size:0.85rem;font-weight:600;cursor:pointer;">确认使用</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- === 智能写作子模块 === -->
+                    <div id="ds-sub-writer" style="display:none;flex-direction:column;min-width:0;flex:1;min-height:0;gap:10px;">
+
+                        <!-- ──────── 生成报告面板 ──────── -->
+                        <div id="wr-panel-gen" style="display:flex;flex-direction:column;gap:10px;flex:1;min-height:0;overflow-y:auto;">
+
+                            <!-- 写作对话历史区（智能对话式） -->
+                            <div id="wr-chat-history" style="display:none;flex-direction:column;gap:8px;overflow-y:auto;padding:10px 12px;background:#f8fafc;border:1px solid var(--border);border-radius:10px;flex:1;min-height:200px;max-height:calc(100vh - 400px);"></div>
+
+                            <!-- 写作需求输入区（智能对话式） -->
+                            <div style="background:linear-gradient(135deg,#f0fdf4,#ecfdf5);border-radius:12px;padding:14px;">
+                                <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+                                    <span style="font-size:1.1rem;">✍️</span>
+                                    <span id="wr-input-label" style="font-weight:700;font-size:0.95rem;color:#065f46;">写作需求</span>
+                                    <span style="font-size:0.72rem;background:#fff;padding:2px 8px;border-radius:20px;color:#059669;">自动检索本地资料 · 可连续修改</span>
+                                </div>
+
+                                <textarea id="wr-query-input" rows="3" placeholder="例如：帮我写一份2026年3月的月度安全检查报告，要包含问题统计、典型问题和整改要求。"
+                                    style="width:100%;padding:10px 12px;border:1px solid #a7f3d0;border-radius:8px;font-size:0.9rem;resize:none;box-sizing:border-box;line-height:1.6;background:#fff;"
+                                    oninput="autoResize(this);wrOnQueryChange()"
+                                    onkeydown="if((event.ctrlKey||event.metaKey)&&event.key==='Enter'){event.preventDefault();wrWrite();}"></textarea>
+
+                                <!-- 检索到的资料预览 -->
+                                <div id="wr-material-preview" style="display:none;margin-top:8px;padding:8px 12px;background:#fff;border:1px solid #6ee7b7;border-radius:8px;font-size:0.8rem;color:#065f46;">
+                                    <div style="font-weight:700;margin-bottom:4px;">📦 已检索到的资料：</div>
+                                    <div id="wr-material-tags" style="display:flex;flex-wrap:wrap;gap:4px;"></div>
+                                </div>
+                            </div>
+
+                            <!-- 操作按钮行 -->
+                            <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                                <button onclick="wrWrite()" id="wr-write-btn"
+                                    style="flex:1;padding:10px 16px;background:var(--primary);color:#fff;border:none;border-radius:var(--radius-md);font-size:0.92rem;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;">
+                                    ✍️ 开始写作
+                                </button>
+                                <button onclick="stopWrGeneration()" id="wr-stop-btn"
+                                    style="display:none;padding:10px 14px;background:#e53e3e;color:#fff;border:none;border-radius:var(--radius-md);font-size:0.85rem;cursor:pointer;font-weight:700;">
+                                    ⏹️ 停止生成
+                                </button>
+                                <button onclick="wrSwitchTab('materials')"
+                                    style="flex:1;padding:10px;border:1px solid var(--border);border-radius:var(--radius-md);background:#f8fafc;font-size:0.85rem;cursor:pointer;">
+                                    🗂️ 资料管理
+                                </button>
+                                <button onclick="wrClearConversation();wrSwitchTab('gen');"
+                                    style="padding:10px 14px;border:1px solid var(--border);border-radius:var(--radius-md);background:#f8fafc;font-size:0.85rem;cursor:pointer;display:flex;align-items:center;gap:4px;">
+                                    ⬅️ 返回
+                                </button>
+                            </div>
+
+                            <!-- 生成进度/结果区 -->
+                            <div id="wr-gen-result" style="display:none;border-radius:12px;overflow:hidden;flex:1;">
+                                <!-- 内容由JS填充 -->
+                            </div>
+                        </div>
+
+                        <!-- ──────── 资料管理面板（整合原模板管理和历史报告） ──────── -->
+                        <div id="wr-panel-materials" style="display:none;flex-direction:column;gap:10px;flex:1;min-height:0;overflow-y:auto;">
+                            <!-- 顶部操作栏 -->
+                            <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
+                                <button onclick="wrSwitchTab('gen')"
+                                    style="padding:8px 14px;border:1px solid var(--border);border-radius:var(--radius-sm);background:#f0fdf4;color:#065f46;font-size:0.85rem;cursor:pointer;font-weight:600;display:flex;align-items:center;gap:5px;">
+                                    ← 返回写作
+                                </button>
+                                <button onclick="wrMaterialImportUnified()"
+                                    style="padding:8px 14px;background:var(--primary);color:#fff;border:none;border-radius:var(--radius-sm);font-size:0.85rem;cursor:pointer;font-weight:600;display:flex;align-items:center;gap:5px;">
+                                    📥 导入资料
+                                </button>
+                                <button onclick="wrMaterialExportAll()"
+                                    style="padding:8px 14px;border:1px solid var(--border);border-radius:var(--radius-sm);background:#f8fafc;font-size:0.82rem;cursor:pointer;">
+                                    📤 导出全部
+                                </button>
+                                <button onclick="wrMaterialClearAll()"
+                                    style="padding:8px 14px;border:1px solid #fca5a5;border-radius:var(--radius-sm);background:#fff1f2;color:#b91c1c;font-size:0.82rem;cursor:pointer;">
+                                    🗑️ 清空全部
+                                </button>
+                                <span id="wr-mat-count" style="font-size:0.78rem;color:var(--text-secondary);white-space:nowrap;margin-left:auto;"></span>
+                            </div>
+                            <!-- 说明栏 -->
+                            <div style="padding:8px 12px;background:#fffbeb;border-radius:8px;border:1px solid #fde68a;font-size:0.8rem;color:#92400e;line-height:1.6;">
+                                <strong>📌 资料类型：</strong>写作模版、历史报告、检查信息、故障报告、通报文电、其它<br>
+                                <strong>📎 导入格式：</strong>DOCX · PDF · Excel · JSON · TXT，导入时手动选择类别存放。
+                            </div>
+                            <!-- 子类分类Tab（合并后） -->
+                            <div style="display:flex;gap:4px;flex-wrap:wrap;align-items:center;border-bottom:2px solid var(--border);padding-bottom:6px;">
+                                <span style="font-size:0.8rem;color:var(--text-secondary);margin-right:2px;">分类：</span>
+                                <button onclick="wrMaterialFilter('all')" id="wr-mat-filter-all" class="wr-mat-tab wr-mat-tab-active" style="padding:5px 12px;border-radius:20px;border:1px solid var(--primary);background:var(--primary);color:#fff;font-size:0.78rem;cursor:pointer;white-space:nowrap;">全部</button>
+                                <button onclick="wrMaterialFilter('template')" id="wr-mat-filter-template" class="wr-mat-tab" style="padding:5px 12px;border-radius:20px;border:1px solid var(--border);background:#f8fafc;font-size:0.78rem;cursor:pointer;white-space:nowrap;">📝 写作模版</button>
+                                <button onclick="wrMatFilterHistory()" id="wr-mat-filter-history" class="wr-mat-tab" style="padding:5px 12px;border-radius:20px;border:1px solid var(--border);background:#f8fafc;font-size:0.78rem;cursor:pointer;white-space:nowrap;">📊 历史报告</button>
+                                <button onclick="wrMaterialFilter('inspect')" id="wr-mat-filter-inspect" class="wr-mat-tab" style="padding:5px 12px;border-radius:20px;border:1px solid var(--border);background:#f8fafc;font-size:0.78rem;cursor:pointer;white-space:nowrap;">🔍 检查信息</button>
+                                <!-- 故障报告（整合故障统计） -->
+                                <button onclick="wrMaterialFilter('fault')" id="wr-mat-filter-fault" class="wr-mat-tab" style="padding:5px 12px;border-radius:20px;border:1px solid var(--border);background:#f8fafc;font-size:0.78rem;cursor:pointer;white-space:nowrap;">⚡ 故障报告</button>
+                                <!-- 通报文电（整合会议纪要） -->
+                                <button onclick="wrMaterialFilter('dispatch')" id="wr-mat-filter-dispatch" class="wr-mat-tab" style="padding:5px 12px;border-radius:20px;border:1px solid var(--border);background:#f8fafc;font-size:0.78rem;cursor:pointer;white-space:nowrap;">📨 通报文电</button>
+                                <button onclick="wrMaterialFilter('other')" id="wr-mat-filter-other" class="wr-mat-tab" style="padding:5px 12px;border-radius:20px;border:1px solid var(--border);background:#f8fafc;font-size:0.78rem;cursor:pointer;white-space:nowrap;">📄 其它</button>
+                                <input id="wr-mat-search" placeholder="搜索..." type="text" oninput="wrRenderMaterials()"
+                                    style="margin-left:auto;padding:5px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:0.82rem;min-width:100px;">
+                            </div>
+                            <!-- 资料列表（普通模式） -->
+                            <div id="wr-mat-list" style="display:flex;flex-direction:column;gap:8px;">
+                                <div style="text-align:center;padding:30px;color:var(--text-secondary);font-size:0.85rem;">暂无资料，点击「导入资料」上传文件</div>
+                            </div>
+                            <!-- 历史报告子区域（点击「历史报告」Tab 时显示） -->
+                            <div id="wr-mat-history-zone" style="display:none;flex-direction:column;gap:8px;flex:1;min-height:0;">
+                                <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
+                                    <button onclick="wrExportAllReports()"
+                                        style="padding:7px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:#f8fafc;font-size:0.82rem;cursor:pointer;">
+                                        📤 导出历史报告
+                                    </button>
+                                    <button onclick="wrClearAllReports()"
+                                        style="padding:7px 12px;border:1px solid #fca5a5;border-radius:var(--radius-sm);background:#fff1f2;color:#b91c1c;font-size:0.82rem;cursor:pointer;">
+                                        🗑️ 清空历史报告
+                                    </button>
+                                    <span id="wr-hist-count" style="font-size:0.78rem;color:var(--text-secondary);white-space:nowrap;margin-left:auto;">0 篇</span>
+                                </div>
+                                <input id="wr-hist-search" placeholder="搜索历史报告..." type="text" oninput="wrRenderHistory()"
+                                    style="padding:8px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:0.85rem;">
+                                <div id="wr-history-list" style="display:flex;flex-direction:column;gap:8px;overflow-y:auto;">
+                                    <div style="text-align:center;padding:30px;color:var(--text-secondary);font-size:0.85rem;">暂无历史报告</div>
+                                </div>
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- 资料导入类型选择弹窗 -->
+    <div id="wr-import-type-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:10001;align-items:center;justify-content:center;">
+        <div style="background:#fff;border-radius:14px;padding:20px;width:min(480px,95vw);display:flex;flex-direction:column;gap:14px;">
+            <div style="display:flex;align-items:center;justify-content:space-between;">
+                <span style="font-weight:700;font-size:1rem;color:var(--primary);">📥 导入资料 — 选择类型</span>
+                <button onclick="document.getElementById('wr-import-type-modal').style.display='none'" style="background:none;border:none;cursor:pointer;font-size:1.2rem;color:var(--text-secondary);">✕</button>
+            </div>
+            <div style="font-size:0.85rem;color:var(--text-secondary);">请先选择资料类型，再选择文件导入：</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+                <button onclick="wrImportWithType('template')" style="padding:10px;border:1px solid var(--border);border-radius:8px;background:#f8fafc;font-size:0.85rem;cursor:pointer;text-align:left;display:flex;align-items:center;gap:6px;transition:all 0.2s;" onmouseover="this.style.background='#eff6ff'" onmouseout="this.style.background='#f8fafc'">📝 写作模版</button>
+                <button onclick="wrImportWithType('history')" style="padding:10px;border:1px solid var(--border);border-radius:8px;background:#f8fafc;font-size:0.85rem;cursor:pointer;text-align:left;display:flex;align-items:center;gap:6px;transition:all 0.2s;" onmouseover="this.style.background='#eff6ff'" onmouseout="this.style.background='#f8fafc'">📊 历史报告</button>
+                <button onclick="wrImportWithType('inspect')" style="padding:10px;border:1px solid var(--border);border-radius:8px;background:#f8fafc;font-size:0.85rem;cursor:pointer;text-align:left;display:flex;align-items:center;gap:6px;transition:all 0.2s;" onmouseover="this.style.background='#eff6ff'" onmouseout="this.style.background='#f8fafc'">🔍 检查信息</button>
+                <button onclick="wrImportWithType('fault')" style="padding:10px;border:1px solid var(--border);border-radius:8px;background:#f8fafc;font-size:0.85rem;cursor:pointer;text-align:left;display:flex;align-items:center;gap:6px;transition:all 0.2s;" onmouseover="this.style.background='#eff6ff'" onmouseout="this.style.background='#f8fafc'">⚡ 故障报告</button>
+                <button onclick="wrImportWithType('dispatch')" style="padding:10px;border:1px solid var(--border);border-radius:8px;background:#f8fafc;font-size:0.85rem;cursor:pointer;text-align:left;display:flex;align-items:center;gap:6px;transition:all 0.2s;" onmouseover="this.style.background='#eff6ff'" onmouseout="this.style.background='#f8fafc'">📨 通报文电</button>
+                <button onclick="wrImportWithType('other')" style="padding:10px;border:1px solid var(--border);border-radius:8px;background:#f8fafc;font-size:0.85rem;cursor:pointer;text-align:left;display:flex;align-items:center;gap:6px;transition:all 0.2s;" onmouseover="this.style.background='#eff6ff'" onmouseout="this.style.background='#f8fafc'">📄 其它</button>
+            </div>
+            <div style="font-size:0.78rem;color:var(--text-secondary);padding:6px 10px;background:#f8fafc;border-radius:6px;">💡 支持格式：DOCX · PDF · Excel（.xlsx/.xls）· JSON · TXT<br>故障统计可归入「故障报告」，会议纪要可归入「通报文电」</div>
+        </div>
+    </div>
+
+    <!-- 智能写作：自定义模板编辑弹窗 -->
+    <div id="wr-tpl-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:10000;align-items:center;justify-content:center;">
+        <div style="background:#fff;border-radius:14px;padding:20px;width:min(600px,95vw);max-height:85vh;display:flex;flex-direction:column;gap:12px;overflow-y:auto;">
+            <div style="display:flex;align-items:center;justify-content:space-between;">
+                <span id="wr-tpl-modal-title" style="font-weight:700;font-size:1rem;color:var(--primary);">📝 自定义模板</span>
+                <button onclick="document.getElementById('wr-tpl-modal').style.display='none'" style="background:none;border:none;cursor:pointer;font-size:1.2rem;color:var(--text-secondary);">✕</button>
+            </div>
+            <div style="font-size:0.8rem;color:var(--text-secondary);padding:6px 10px;background:#eff6ff;border-radius:6px;border:1px solid #bfdbfe;">💡 自定义模板：可将历史报告文本粘贴于此，保存后在撰写报告时可选用。支持 {{占位符}} 格式。</div>
+            <div style="display:flex;flex-direction:column;gap:8px;">
+                <label style="font-size:0.85rem;font-weight:600;">模板名称</label>
+                <input id="wr-tpl-name" type="text" placeholder="例如：月度安全检查报告模板" style="padding:8px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:0.9rem;">
+            </div>
+            <div style="display:flex;flex-direction:column;gap:8px;">
+                <label style="font-size:0.85rem;font-weight:600;">报告类型</label>
+                <select id="wr-tpl-category" style="padding:8px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:0.9rem;">
+                    <option value="custom">自定义</option>
+                    <option value="monthly">月度安全报告</option>
+                    <option value="check">安全检查报告</option>
+                    <option value="accident">事故分析报告</option>
+                    <option value="rectify">整改通知书</option>
+                    <option value="summary">年度总结</option>
+                </select>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:8px;">
+                <label style="font-size:0.85rem;font-weight:600;">模板内容
+                    <span style="font-weight:400;color:var(--text-secondary);">（支持 {{日期}}、{{问题总数}}、{{部门}} 等占位符）</span>
+                </label>
+                <textarea id="wr-tpl-content" rows="12" placeholder="在此输入或粘贴历史报告内容，可使用占位符如：&#10;{{日期}}  {{部门}}  {{问题总数}}  {{典型问题列表}}  {{整改要求}}"
+                    style="padding:10px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:0.87rem;resize:vertical;line-height:1.7;font-family:inherit;"></textarea>
+            </div>
+            <div style="display:flex;gap:8px;justify-content:flex-end;">
+                <button onclick="document.getElementById('wr-tpl-modal').style.display='none'" style="padding:9px 20px;border:1px solid var(--border);border-radius:var(--radius-sm);background:#f8fafc;cursor:pointer;">取消</button>
+                <button onclick="wrSaveTemplate()" style="padding:9px 20px;background:var(--primary);color:#fff;border:none;border-radius:var(--radius-sm);font-weight:600;cursor:pointer;">保存模板</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 智能写作：历史报告查看弹窗 -->
+    <div id="wr-report-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:10000;align-items:center;justify-content:center;">
+        <div style="background:#fff;border-radius:14px;padding:20px;width:min(680px,96vw);max-height:88vh;display:flex;flex-direction:column;gap:12px;overflow-y:auto;">
+            <div style="display:flex;align-items:center;justify-content:space-between;flex-shrink:0;">
+                <span id="wr-report-modal-title" style="font-weight:700;font-size:0.97rem;color:var(--primary);flex:1;margin-right:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">报告详情</span>
+                <div style="display:flex;gap:6px;flex-shrink:0;">
+                    <button onclick="wrCopyReport()" style="padding:6px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:#f8fafc;font-size:0.82rem;cursor:pointer;">📋 复制</button>
+                    <button onclick="wrModifyReportFromView()" style="padding:6px 12px;border:1px solid #bfdbfe;border-radius:var(--radius-sm);background:#eff6ff;color:#1d4ed8;font-size:0.82rem;cursor:pointer;">✏️ 修改</button>
+                    <button onclick="wrDownloadReport()" style="padding:6px 12px;background:var(--primary);color:#fff;border:none;border-radius:var(--radius-sm);font-size:0.82rem;cursor:pointer;">📥 下载TXT</button>
+                    <button onclick="wrDownloadDocxFromTemplate()" style="padding:6px 12px;background:#2b6cb0;color:#fff;border:none;border-radius:var(--radius-sm);font-size:0.82rem;cursor:pointer;">📄 导出DOCX(模板)</button>
+                    <button onclick="document.getElementById('wr-report-modal').style.display='none'" style="background:none;border:none;cursor:pointer;font-size:1.2rem;color:var(--text-secondary);padding:0 4px;">✕</button>
+                </div>
+            </div>
+            <div id="wr-report-modal-meta" style="font-size:0.78rem;color:var(--text-secondary);flex-shrink:0;"></div>
+            <div id="wr-report-modal-content" style="flex:1;overflow-y:auto;font-size:0.88rem;line-height:1.85;white-space:pre-wrap;background:#f8fafc;padding:14px;border-radius:8px;border:1px solid var(--border);"></div>
+        </div>
+    </div>
+
+    <!-- DeepSeek 侧边栏：遮罩层 + 抽屉（放在 body 根级别，避免 fixed 定位被祖先影响） -->
+    <div id="ds-sidebar-overlay" onclick="dsToggleSidebar()"
+        style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.35);z-index:9998;"></div>
+    <div id="ds-sidebar"
+        style="position:fixed;top:60px;left:-280px;width:260px;max-height:calc(100vh - 120px);z-index:9999;
+               display:flex;flex-direction:column;gap:8px;
+               background:#f8fafc;border-right:1px solid var(--border);
+               padding:14px;box-shadow:2px 0 16px rgba(0,0,0,0.15);
+               transition:left 0.28s cubic-bezier(0.4,0,0.2,1);overflow:visible;
+               border-radius:0 12px 12px 0;">
+        <!-- 抽屉头部 -->
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-shrink:0;">
+            <span style="font-weight:700;font-size:0.92rem;color:var(--primary);">💬 历史对话</span>
+            <button onclick="dsToggleSidebar()"
+                style="background:none;border:none;cursor:pointer;font-size:1.1rem;color:var(--text-secondary);padding:4px 6px;border-radius:6px;line-height:1;"
+                title="收起">✕</button>
+        </div>
+        <!-- 新建对话按钮 -->
+        <button onclick="dsNewChat();dsToggleSidebar();" class="btn btn-primary" style="width:100%;display:flex;align-items:center;justify-content:center;gap:6px;flex-shrink:0;padding:8px;">
+            <span>＋</span> 新建对话
+        </button>
+        <!-- 历史记录列表（紧凑布局） -->
+        <div style="flex:1;overflow-y:auto;min-height:0;" id="ds-history-list">
+            <div style="text-align:center;color:#64748b;padding:16px 10px;font-size:0.82rem;">
+                暂无历史记录
+            </div>
+        </div>
+    </div>
+
+    <footer class="footer">
+        <div>铁路安监智能查询系统 · 开发者：赵海兵</div>
+        <div style="margin-top:4px;opacity:0.7;">© 2026 支持离线浏览 · 新增AI对规、对话、写作</div>
+    </footer>
+
+    <!-- 备忘弹窗 -->
+    <div id="memo-modal" class="modal">
+        <div class="modal-content memo-modal-content">
+            <div class="modal-header">
+                <div class="modal-title">🔔 新建备忘提醒</div>
+                <button class="modal-close" onclick="closeMemoModal()">✕</button>
+            </div>
+            <div class="modal-body">
+                <!-- 备忘列表 -->
+                <div id="memo-list-section">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+                        <span style="font-weight:600;color:var(--text);">📋 已有备忘</span>
+                        <button class="btn btn-primary btn-small" onclick="showMemoForm()">＋ 新建</button>
+                    </div>
+                    <div id="memo-list"></div>
+                </div>
+                <!-- 新建备忘表单 -->
+                <div id="memo-form-section" style="display:none;">
+                    <div class="form-group">
+                        <label class="form-label">📅 提醒日期时间</label>
+                        <input type="datetime-local" id="memo-datetime" class="form-input" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:1rem;">
+                    </div>
+                    <div class="form-group" style="margin-top:12px;">
+                        <label class="form-label">📝 提醒内容</label>
+                        <textarea id="memo-content" class="diary-textarea" placeholder="请输入提醒内容..." rows="4" style="min-height:90px;" oninput="autoResize(this)"></textarea>
+                    </div>
+                    <div style="display:flex;gap:8px;margin-top:16px;">
+                        <button class="btn btn-primary" style="flex:1;" onclick="saveMemo()">💾 保存提醒</button>
+                        <button class="btn btn-secondary" style="flex:1;" onclick="showMemoList()">↩ 返回列表</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 原有模态框 (规章制度相关需完整保留) -->
+    <div id="issue-clearModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header"><div class="modal-title">⚠️ 确认清空数据</div></div>
+            <div class="modal-body">
+                <p>确定要清空所有数据吗？此操作不可恢复！</p>
+                <p style="margin-top:12px;color:var(--accent);font-weight:600;">当前共有: <span id="issue-clearCount">0</span> 条记录</p>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="issueHideModal('issue-clearModal')">取消</button>
+                <button class="btn btn-danger" onclick="issueConfirmClear()">确认清空</button>
+            </div>
+        </div>
+    </div>
+    <div id="issue-importModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header"><div class="modal-title">📥 正在导入数据</div></div>
+            <div class="modal-body" style="text-align:center;">
+                <div class="spinner"></div>
+                <p id="issue-importStatus">正在解析Excel...</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- 规章制度模态框组 (必须完整) -->
+    <div id="rule-importModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header"><div class="modal-title" id="rule-importTitle">📥 导入规章</div></div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label class="form-label">选择专业</label>
+                    <select id="rule-importTrade" class="form-select">
+                        <option value="">-- 选择专业 --</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">或输入新专业</label>
+                    <input type="text" id="rule-importNewTrade" class="form-input" placeholder="新专业名称">
+                </div>
+                <p style="font-size:0.85rem;color:var(--text-secondary);margin-top:8px;">💡 选择专业后将开始导入文件</p>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeImportModal()">取消</button>
+                <button class="btn btn-primary" onclick="confirmImportTrade()">开始导入</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="rule-catalogModal" class="modal">
+        <div class="modal-content wide">
+            <div class="modal-header"><div class="modal-title">📋 规章目录 <span id="rule-catalogStats" style="font-size:0.8rem;font-weight:normal;opacity:0.8;margin-left:10px;">共 0 条</span></div></div>
+            <div class="modal-body">
+                <div style="display:flex;gap:10px;margin-bottom:16px;">
+                    <input type="text" id="rule-catalogFilter" class="form-input" placeholder="🔍 搜索规章标题...">
+                    <select id="rule-catalogTradeFilter" class="form-select" style="width:150px;">
+                        <option value="">全部专业</option>
+                    </select>
+                </div>
+                <div class="catalog-list" id="rule-catalogList"><div class="empty-state">暂无规章</div></div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-danger" onclick="clearAllRules()">🗑️ 清空所有</button>
+                <button class="btn btn-secondary" onclick="closeModal('rule-catalogModal')">关闭</button>
+            </div>
+        </div>
+    </div>
+
+
+
+
+    <div id="rule-editModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header"><div class="modal-title">✏️ 编辑规章</div></div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label class="form-label">规章标题</label>
+                    <input type="text" id="rule-editTitle" class="form-input" style="font-size:1rem; padding:12px 16px;">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">选择专业</label>
+                    <select id="rule-editTrade" class="form-select"><option value="">-- 选择专业 --</option></select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">或输入新专业</label>
+                    <input type="text" id="rule-editNewTrade" class="form-input" placeholder="新专业名称">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeModal('rule-editModal')">取消</button>
+                <button class="btn btn-primary" onclick="saveRuleEdit()">保存</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="rule-exportModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header"><div class="modal-title">📤 导出规章</div></div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label class="form-label">选择要导出的专业</label>
+                    <select id="rule-exportTrade" class="form-select">
+                        <option value="">所有专业 (全部导出)</option>
+                    </select>
+                </div>
+                <div class="form-group" style="margin-top:16px;">
+                    <label class="form-label">选择导出格式</label>
+                    <div style="display:flex;gap:12px;margin-top:8px;">
+                        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;">
+                            <input type="radio" name="exportFormat" value="json" checked style="cursor:pointer;">
+                            <span>JSON格式（纯数据，体积小）</span>
+                        </label>
+                        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;">
+                            <input type="radio" name="exportFormat" value="zip" style="cursor:pointer;">
+                            <span>ZIP格式（含图片，完整备份）</span>
+                        </label>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeModal('rule-exportModal')">取消</button>
+                <button class="btn btn-primary" onclick="doExport(document.querySelector('input[name=exportFormat]:checked').value)">导出</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 规章全文查看模态框（带关键词高亮 · 响应式宽度） -->
+    <div id="rule-fullViewModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header" style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+                <div class="modal-title" id="rule-fullViewTitle" style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">规章全文</div>
+                <button onclick="closeModal('rule-fullViewModal')" style="background:rgba(255,255,255,0.2);border:none;color:white;width:30px;height:30px;border-radius:50%;cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center;flex-shrink:0;">✕</button>
+            </div>
+            <div class="modal-body" style="padding:20px;">
+                <!-- 规章信息行 -->
+                <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap;">
+                    <span class="rule-trade" id="rule-fullViewTrade"></span>
+                    <span style="font-size:0.8rem;color:var(--text-secondary);" id="rule-fullViewLength"></span>
+                </div>
+                <!-- 顶部关键词命中提示栏 -->
+                <div id="rule-fullViewHlBar">
+                    <div class="fv-hl-bar-info">
+                        <span>🔍</span>
+                        <span id="rule-fullViewHlBarText">已找到</span>
+                        <span class="fv-hl-total" id="rule-fullViewHlTotal">0</span>
+                        <span>处命中，关键词：</span>
+                        <span id="rule-fullViewHlKwTags"></span>
+                        <span id="rule-fullViewHlPosText" style="font-size:0.8rem;color:#a05000;margin-left:4px;"></span>
+                    </div>
+                    <div class="fv-hl-nav">
+                        <button onclick="ruleFvPrevHl()">↑ 上一处</button>
+                        <button onclick="ruleFvNextHl()">↓ 下一处</button>
+                    </div>
+                </div>
+                <!-- 全文内容区 -->
+                <div id="rule-fvScrollWrap" style="position:relative;">
+                    <div id="rule-fullContentBody" style="background:#f7fafc;padding:20px;border-radius:10px;border-left:4px solid var(--info);max-height:58vh;overflow-y:auto;font-size:0.95rem;line-height:1.9;color:var(--text);word-break:break-word;"></div>
+                    <div id="rule-fvScrollbar"><div id="rule-fvScrollThumb"></div></div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeModal('rule-fullViewModal')">关闭</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 新增手册模块的导入确认模态框 -->
+    <div class="modal" id="handbook-importModal">
+        <div class="modal-content">
+            <div class="modal-header"><div class="modal-title">确认导入</div></div>
+            <div class="modal-body" id="handbook-importMessage">正在处理...</div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeModal('handbook-importModal')">取消</button>
+                <button class="btn btn-primary" id="handbook-confirmImport">✅ 追加合并</button>
+                <button class="btn btn-warning" id="handbook-confirmOverwrite">🔄 覆盖现有</button>
+            </div>
+        </div>
+    </div>
+
+
+    <!-- Modular JS -->
+    <script src="src/js/modules/utils.js"></script>
+    <script src="src/js/modules/issue.js"></script>
+    <script src="src/js/modules/rule.js"></script>
+    <script src="src/js/modules/diary.js"></script>
+    <script src="src/js/modules/phone.js"></script>
+    <script src="src/js/modules/handbook.js"></script>
+    <script src="src/js/modules/doubao.js"></script>
+    <script src="src/js/modules/backup.js"></script>
+</body>
+</html>
