@@ -46,7 +46,8 @@
             function enableExitDetection() {
                 if (_popEnabled) return;
                 _popEnabled = true;
-                history.pushState(null, null, location.href);
+                // file:// 协议下 pushState 会抛错，需 try-catch
+                try { history.pushState(null, null, location.href); } catch(ex) {}
 
                 window.addEventListener('popstate', function(e) {
                     if (!_popEnabled) return;
@@ -63,7 +64,7 @@
                         bar.classList.remove('show');
                         _exitReady = false;
                     }, 3000);
-                    history.pushState(null, null, location.href); // 恢复历史
+                    try { history.pushState(null, null, location.href); } catch(ex) {} // 恢复历史
                 });
             }
 
