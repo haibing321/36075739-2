@@ -13,6 +13,7 @@
     <script>
     (function() {
         'use strict';
+
         // 退出提示 DOM 和样式创建（等待 DOM 加载完成后执行）
         function initExitHint() {
             // 注入退出提示样式
@@ -42,36 +43,39 @@
             var _exitReady = false, _exitTimer = null;
             var _popEnabled = false; // 是否启用退出检测
 
-            // 启用退出检测（用户首次交互后调用）
+            // ===== popstate 处理器（无条件添加，在 _popEnabled 为 true 时才真正处理）=====
+            function handlePopstate(e) {
+                if (!_popEnabled) return;
+
+                if (_exitReady) {
+                    _exitReady = false;
+                    return; // 第二次：允许真正退出（不阻止默认行为）
+                }
+                // 第一次：显示退出提示，阻止退出
+                bar.classList.add('show');
+                _exitReady = true;
+                if (_exitTimer) clearTimeout(_exitTimer);
+                _exitTimer = setTimeout(function() {
+                    bar.classList.remove('show');
+                    _exitReady = false;
+                }, 3000);
+                try { history.pushState(null, null, location.href); } catch(ex) {}
+            }
+
+            // 无条件添加 popstate 监听（关键修复：不等 enableExitDetection）
+            window.addEventListener('popstate', handlePopstate);
+
+            // ===== 启用退出检测（立即执行，不等待用户交互）=====
             function enableExitDetection() {
                 if (_popEnabled) return;
                 _popEnabled = true;
-                // file:// 协议下 pushState 会抛错，需 try-catch
                 try { history.pushState(null, null, location.href); } catch(ex) {}
-
-                window.addEventListener('popstate', function(e) {
-                    if (!_popEnabled) return;
-
-                    if (_exitReady) {
-                        _exitReady = false;
-                        return; // 第二次：允许真正退出
-                    }
-                    // 第一次：显示退出提示
-                    bar.classList.add('show');
-                    _exitReady = true;
-                    if (_exitTimer) clearTimeout(_exitTimer);
-                    _exitTimer = setTimeout(function() {
-                        bar.classList.remove('show');
-                        _exitReady = false;
-                    }, 3000);
-                    try { history.pushState(null, null, location.href); } catch(ex) {} // 恢复历史
-                });
             }
 
-            // 页面加载后延迟 500ms 自动启用（覆盖大多数自动触发场景）
-            setTimeout(enableExitDetection, 500);
+            // DOMContentLoaded 时立即启用（不等 500ms，不等用户交互）
+            enableExitDetection();
 
-            // 监听用户首次交互，提前启用
+            // 同时保留用户交互触发（双重保险，但 enableExitDetection 内有 _popEnabled 守卫不会重复执行）
             ['touchstart', 'click', 'keydown', 'focus'].forEach(function(evt) {
                 document.addEventListener(evt, enableExitDetection, { once: true, capture: true });
             });
@@ -93,8 +97,7 @@
             initExitHint();
         }
     })();
-
-    <!-- 第三方库 (CDN) — 带 onerror 容错 -->
+    </script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" onerror="console.warn('[CDN] xlsx 加载失败，导入/导出功能受限')"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js" onerror="console.warn('[CDN] pdf.js 加载失败，PDF预览功能受限')"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.4.2/mammoth.browser.min.js" onerror="console.warn('[CDN] mammoth 加载失败，Word解析功能受限')"></script>
