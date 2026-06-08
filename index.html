@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
     <title>安监智能查询系统 · 完整六模块版</title>
     <meta name="theme-color" content="#1a365d">
-    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <link rel="manifest" href="manifest.json">
     <meta name="description" content="铁路安全检查智能查询系统 — 问题库、规章、日志、通讯录、手册、AI助手六合一工具">
@@ -14,9 +14,9 @@
     <!-- 内容安全策略（渐进式加固） -->
     <meta http-equiv="Content-Security-Policy"
           content="default-src 'self';
-                   script-src 'self' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net 'unsafe-inline' 'unsafe-eval';
+                   script-src 'self' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://unpkg.com 'unsafe-inline' 'unsafe-eval';
                    style-src 'self' 'unsafe-inline';
-                   connect-src 'self' https://api.deepseek.com https://api.open-meteo.com https://geocoding-api.open-meteo.com https://api.allorigins.win https://api.duckduckgo.com;
+                   connect-src 'self' https://api.deepseek.com https://api.open-meteo.com https://geocoding-api.open-meteo.com https://api.allorigins.win https://api.duckduckgo.com https://cdnjs.cloudflare.com;
                    img-src 'self' blob: data:;
                    frame-src https://www.doubao.com;
                    font-src 'self';
@@ -1211,9 +1211,9 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js" defer onerror="console.warn('[CDN] pdf.js 加载失败')"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.4.2/mammoth.browser.min.js" defer onerror="console.warn('[CDN] mammoth 加载失败')"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/fuse.js/6.6.2/fuse.min.js" defer onerror="console.warn('[CDN] fuse.js 加载失败')"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/pinyin/2.11.0/pinyin.min.js" defer onerror="console.warn('[CDN] pinyin 加载失败')"></script>
+    <script src="https://unpkg.com/pinyin@2.11.0/lib/index.js" defer onerror="console.warn('[CDN] pinyin 加载失败')"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js" defer onerror="console.warn('[CDN] jszip 加载失败')"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/xml-js/1.6.11/xml-js.min.js" defer onerror="console.warn('[CDN] xml-js 加载失败')"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xml-js@1.6.11/dist/xml-js.min.js" defer onerror="console.warn('[CDN] xml-js 加载失败')"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.6/purify.min.js" defer onerror="console.warn('[CDN] DOMPurify 加载失败')"></script>
     <script src="https://cdn.jsdelivr.net/npm/html-docx-js@0.3.1/dist/html-docx.js" defer onerror="console.warn('[CDN] html-docx 加载失败')"></script>
     <!-- 本地模块（defer: 并行下载，DOM 解析后按顺序执行） -->

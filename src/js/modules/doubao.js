@@ -6537,8 +6537,8 @@ ${details || '(无)'}
             };
 
         // ---- 将内部函数暴露到全局（供 HTML onclick 调用）----
-        window.toggleDoubaoMode      = toggleDoubaoMode;
-        window.showApiConfigModal     = showApiConfigModal;
+        window.toggleDoubaoMode      = typeof toggleDoubaoMode !== 'undefined' ? toggleDoubaoMode : function(){ console.warn('[doubao] toggleDoubaoMode 未定义'); };
+        window.showApiConfigModal     = typeof showApiConfigModal !== 'undefined' ? showApiConfigModal : function(){};
         window.saveApiConfigFromModal = saveApiConfigFromModal;
         window.bindApiModalEvents     = bindApiModalEvents;
         // dsInit 在 IIFE 开头定义，也需暴露
