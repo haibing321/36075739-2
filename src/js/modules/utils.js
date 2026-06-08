@@ -37,13 +37,9 @@
             if (isOpen) {
                 nav.classList.remove('nav-open');
                 toggle.classList.remove('open');
-                toggle.setAttribute('aria-label', '展开导航菜单');
-                toggle.setAttribute('aria-expanded', 'false');
             } else {
                 nav.classList.add('nav-open');
                 toggle.classList.add('open');
-                toggle.setAttribute('aria-label', '收起导航菜单');
-                toggle.setAttribute('aria-expanded', 'true');
             }
         };
 
@@ -68,7 +64,6 @@
             }
             document.querySelectorAll('.nav-btn').forEach(function(t) {
                 t.classList.remove('active');
-                t.setAttribute('aria-selected', 'false');
             });
             document.querySelectorAll('.panel').forEach(function(p) {
                 p.classList.remove('active');
@@ -76,7 +71,6 @@
             var activeBtn = document.getElementById('tab-' + tab);
             if (activeBtn) {
                 activeBtn.classList.add('active');
-                activeBtn.setAttribute('aria-selected', 'true');
             }
             var activePanel = document.getElementById('panel-' + tab);
             if (activePanel) activePanel.classList.add('active');
@@ -89,7 +83,6 @@
             if (nav && nav.classList.contains('nav-open')) {
                 nav.classList.remove('nav-open');
                 toggle.classList.remove('open');
-                toggle.setAttribute('aria-label', '展开导航菜单');
             }
             // 侧滑时不再显示 Toast 记录框
             // if (fromSwipe) {
@@ -219,400 +212,34 @@
             return escaped.replace(/\n/g, '<br>');
         };
 
+                // ============================================================
+        // API Key 存储（明文 localStorage）
         // ============================================================
-        // API Key 加密存储（AES-256-GCM + PBKDF2）
-        // ============================================================
 
         /**
-         * API Key 安全加密存储模块
-         *
-         * 使用 Web Crypto API 实现 AES-256-GCM 加密，PBKDF2 密钥派生。
-         * 解决问题：API Key 明文存储在 localStorage 中，打开 DevTools 即可窃取。
-         *
-         * 工作流程：
-         *   1. 首次保存 Key → 弹出口令设置框 → 加密后存储
-         *   2. 后续读取 → 用口令解密 → 内存中使用（页面关闭即清除）
-         *   3. 口令仅缓存在内存中（JavaScript 变量），不持久化
-         *
-         * 存储格式（localStorage）：
-         *   - ds_api_key_v1: '{"e":1,"d":"base64(iv+salt+ciphertext)"}'  (加密后)
-         *   - 原始明文格式 'sk-xxxx' 会在首次加密时自动迁移
-         *
-         * 兼容性：Chrome 37+, Firefox 34+, Safari 11+, Huawei Browser 9+
-         *         不支持时自动降级为明文（输出 warning）
+         * 保存 API Key 到 localStorage（明文）
+         * @param {string} key - API Key
+         * @param {string} storageKey - localStorage 键名
          */
-
-        var _cryptoCache = {
-            password: null,      // 当前会话的解锁口令（内存 only）
-            plainKey: null,     // 解密后的明文 Key（内存 only）
-            verified: false     // 口令是否已验证成功
-        };
-
-        /**
-         * 检查浏览器是否支持 Web Crypto API
-         */
-        window.isCryptoSupported = function() {
-            return !!(window.crypto && window.crypto.subtle && window.TextEncoder);
-        };
-
-        /**
-         * 将 ArrayBuffer 转为 Base64 字符串
-         */
-        function _arrayBufferToBase64(buffer) {
-            var bytes = new Uint8Array(buffer);
-            var binary = '';
-            for (var i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
-            return btoa(binary);
-        }
-
-        /**
-         * 将 Base64 字符串转为 ArrayBuffer
-         */
-        function _base64ToArrayBuffer(base64) {
-            var binary = atob(base64);
-            var bytes = new Uint8Array(binary.length);
-            for (var i = 0; i < bytes.length; i++) bytes[i] = binary.charCodeAt(i);
-            return bytes.buffer;
-        }
-
-        /**
-         * 使用 PBKDF2 从口令派生 AES-256-GCM 密钥
-         * @param {string} password - 用户口令
-         * @param {Uint8Array} salt - 随机盐值 (16 bytes)
-         * @returns {Promise<CryptoKey>} 派生的加密密钥
-         */
-        async function _deriveKey(password, salt) {
-            var enc = new TextEncoder();
-            var keyMaterial = await window.crypto.subtle.importKey(
-                'raw', enc.encode(password), 'PBKDF2', false, ['deriveKey']
-            );
-            return window.crypto.subtle.deriveKey(
-                { name: 'PBKDF2', salt: salt, iterations: 100000, hash: 'SHA-256' },
-                keyMaterial,
-                { name: 'AES-GCM', length: 256 },
-                false, ['encrypt', 'decrypt']
-            );
-        }
-
-        /**
-         * 加密明文字符串
-         * @param {string} plaintext - 要加密的文本（如 API Key）
-         * @param {string} password - 用户口令
-         * @returns {Promise<string>} Base64 编码的 JSON {iv, salt, data}
-         */
-        window.cryptoEncrypt = async function(plaintext, password) {
-            if (!window.isCryptoSupported()) throw new Error('浏览器不支持 Web Crypto API');
-            var salt = window.crypto.getRandomValues(new Uint8Array(16));
-            var iv = window.crypto.getRandomValues(new Uint8Array(12));
-            var key = await _deriveKey(password, salt);
-            var enc = new TextEncoder();
-            var cipherBuffer = await window.crypto.subtle.encrypt(
-                { name: 'AES-GCM', iv: iv }, key, enc.encode(plaintext)
-            );
-            var result = JSON.stringify({
-                iv: _arrayBufferToBase64(iv),
-                salt: _arrayBufferToBase64(salt),
-                data: _arrayBufferToBase64(cipherBuffer)
-            });
-            return result;
-        };
-
-        /**
-         * 解密密文字符串
-         * @param {string} encrypted - cryptoEncrypt 返回的 base64 JSON
-         * @param {string} password - 用户口令
-         * @returns {Promise<string>} 解密后的明文
-         */
-        window.cryptoDecrypt = async function(encrypted, password) {
-            if (!window.isCryptoSupported()) throw new Error('浏览器不支持 Web Crypto API');
-            var obj = JSON.parse(encrypted);
-            var iv = _base64ToArrayBuffer(obj.iv);
-            var salt = _base64ToArrayBuffer(obj.salt);
-            var data = _base64ToArrayBuffer(obj.data);
-            var key = await _deriveKey(password, salt);
-            var dec = new TextDecoder();
-            var plainBuffer = await window.crypto.subtle.decrypt(
-                { name: 'AES-GCM', iv: iv }, key, data
-            );
-            return dec.decode(plainBuffer);
-        };
-
-        /**
-         * 检测 localStorage 中的值是否已加密格式
-         * @param {string} value - localStorage 中读取的原始值
-         * @returns {boolean}
-         */
-        window.isEncryptedValue = function(value) {
-            if (!value || value.length < 10) return false;
-            // 加密后的值以 {"e":1 或 {"iv": 开头
-            try {
-                var parsed = JSON.parse(value);
-                return (parsed.e === 1 || parsed.iv) && typeof parsed.d === 'string' || typeof parsed.data === 'string';
-            } catch(e) {
-                return false;
-            }
-        };
-
-        /**
-         * 显示口令输入对话框（用于加密/解密 API Key）
-         * @param {object} opts
-         *   - title: 对话框标题
-         *   - message: 提示信息
-         *   - confirmText: 确认按钮文字
-         *   - showOldPassword: 是否显示旧口令字段（用于更改口令）
-         * @returns {Promise<string|null>} 用户输入的口令，或 null（取消）
-         */
-        window.showPasswordPrompt = function(opts) {
-            opts = opts || {};
-            var title = opts.title || '🔐 设置安全口令';
-            var message = opts.message || '请设置一个口令用于加密保护你的 API Key。此口令不会存储，每次使用时需要输入。';
-            var confirmText = opts.confirmText || '确认';
-            var showOld = opts.showOldPassword || false;
-
-            return new Promise(function(resolve) {
-                // 移除已有对话框
-                var oldEl = document.getElementById('_crypto_pwd_modal');
-                if (oldEl) oldEl.parentNode.removeChild(oldEl);
-
-                var modal = document.createElement('div');
-                modal.id = '_crypto_pwd_modal';
-                modal.style.cssText = [
-                    'position:fixed;top:0;left:0;width:100%;height:100%;',
-                    'background:rgba(0,0,0,0.6);backdrop-filter:blur(4px);',
-                    'display:flex;align-items:center;justify-content:center;',
-                    'z-index:100000;'
-                ].join('');
-
-                modal.innerHTML = '<div style="background:#fff;border-radius:16px;padding:28px;max-width:400px;width:90%;box-shadow:0 20px 60px rgba(0,0,0,0.3);">'
-                    + '<div style="font-size:1.4rem;font-weight:700;margin-bottom:8px;color:#1e293b;">' + title + '</div>'
-                    + '<div style="font-size:0.88rem;color:#64748b;margin-bottom:20px;line-height:1.5;">' + message + '</div>'
-                    + (showOld ? '<div style="margin-bottom:14px;"><label style="display:block;font-size:0.85rem;color:#475569;margin-bottom:6px;font-weight:600;">当前口令</label>'
-                    + '<input type="password" id="_crypto_old_pwd" style="width:100%;padding:10px 12px;border:2px solid #e2e8f0;border-radius:8px;font-size:0.95rem;box-sizing:border-box;outline:none;transition:border-color 0.2s;" onfocus="this.style.borderColor=\'#3b82f6\'" onblur="this.style.borderColor=\'#e2e8f0\'" placeholder="输入当前口令"></div>' : '')
-                    + '<div style="margin-bottom:14px;"><label style="display:block;font-size:0.85rem;color:#475569;margin-bottom:6px;font-weight:600;">' + (showOld ? '新口令' : '安全口令') + '</label>'
-                    + '<input type="password" id="_crypto_new_pwd" style="width:100%;padding:10px 12px;border:2px solid #e2e8f0;border-radius:8px;font-size:0.95rem;box-sizing:border-box;outline:none;transition:border-color 0.2s;" onfocus="this.style.borderColor=\'#3b82f6\'" onblur="this.style.borderColor=\'#e2e8f0\'" placeholder="' + (showOld ? '输入新口令' : '输入至少4位的安全口令') + '" autocomplete="new-password"></div>'
-                    + '<div style="margin-bottom:20px;"><label style="display:block;font-size:0.85rem;color:#475569;margin-bottom:6px;font-weight:600;">确认口令</label>'
-                    + '<input type="password" id="_crypto_confirm_pwd" style="width:100%;padding:10px 12px;border:2px solid #e2e8f0;border-radius:8px;font-size:0.95rem;box-sizing:border-box;outline:none;transition:border-color 0.2s;" onfocus="this.style.borderColor=\'#3b82f6\'" onblur="this.style.borderColor=\'#e2e8f0\'" placeholder="再次输入口令" autocomplete="new-password"></div>'
-                    + '<div style="display:flex;gap:10px;justify-content:flex-end;">'
-                    + '<button id="_crypto_pwd_cancel" style="padding:10px 22px;border:2px solid #e2e8f0;background:#fff;color:#64748b;border-radius:8px;font-size:0.9rem;font-weight:600;cursor:pointer;transition:all 0.2s;" onmouseover="this.style.background=\'#f8fafc\'" onmouseout="this.style.background=\'#fff\'">取消</button>'
-                    + '<button id="_crypto_pwd_ok" style="padding:10px 22px;border:none;background:linear-gradient(135deg,#2563eb,#3b82f6);color:#fff;border-radius:8px;font-size:0.9rem;font-weight:600;cursor:pointer;transition:all 0.2s;" onmouseover="this.style.opacity=\'0.9\'" onmouseout="this.style.opacity=\'1\'">' + confirmText + '</button>'
-                    + '</div></div>';
-
-                document.body.appendChild(modal);
-
-                var cancelBtn = document.getElementById('_crypto_pwd_cancel');
-                var okBtn = document.getElementById('_crypto_pwd_ok');
-
-                cancelBtn.onclick = function() {
-                    modal.parentNode.removeChild(modal);
-                    resolve(null);
-                };
-                okBtn.onclick = function() {
-                    var newVal = document.getElementById('_crypto_new_pwd').value;
-                    var confirmVal = document.getElementById('_crypto_confirm_pwd').value;
-                    var oldVal = showOld ? document.getElementById('_crypto_old_pwd').value : '';
-                    if (!newVal || newVal.length < 4) { alert('口令至少需要 4 个字符'); return; }
-                    if (newVal !== confirmVal) { alert('两次输入的口令不一致'); return; }
-                    modal.parentNode.removeChild(modal);
-                    resolve({ password: newVal, oldPassword: oldVal });
-                };
-                // Enter 键确认
-                var inputs = modal.querySelectorAll('input[type="password"]');
-                for (var i = 0; i < inputs.length; i++) {
-                    inputs[i].addEventListener('keydown', function(e) {
-                        if (e.key === 'Enter') okBtn.click();
-                    });
-                }
-                // 聚焦到第一个输入框
-                setTimeout(function() {
-                    var firstInput = showOld ? document.getElementById('_crypto_old_pwd') : document.getElementById('_crypto_new_pwd');
-                    if (firstInput) firstInput.focus();
-                }, 100);
-            });
-        };
-
-        /**
-         * 简化版口令提示（仅需输入一次口令，用于解锁）
-         * @param {string} title - 标题
-         * @param {string} message - 提示信息
-         * @returns {Promise<string|null>}
-         */
-        window.showUnlockPrompt = function(title, message) {
-            return new Promise(function(resolve) {
-                var oldEl = document.getElementById('_crypto_unlock_modal');
-                if (oldEl) oldEl.parentNode.removeChild(oldEl);
-
-                var modal = document.createElement('div');
-                modal.id = '_crypto_unlock_modal';
-                modal.style.cssText = [
-                    'position:fixed;top:0;left:0;width:100%;height:100%;',
-                    'background:rgba(0,0,0,0.6);backdrop-filter:blur(4px);',
-                    'display:flex;align-items:center;justify-content:center;z-index:100000;'
-                ].join('');
-
-                modal.innerHTML = '<div style="background:#fff;border-radius:16px;padding:28px;max-width:380px;width:90%;box-shadow:0 20px 60px rgba(0,0,0,0.3);">'
-                    + '<div style="font-size:1.35rem;font-weight:700;margin-bottom:8px;color:#1e293b;">' + (title || '🔐 验证身份') + '</div>'
-                    + '<div style="font-size:0.88rem;color:#64748b;margin-bottom:20px;line-height:1.5;">' + (message || '请输入安全口令以解锁 API Key。') + '</div>'
-                    + '<div style="margin-bottom:20px;">'
-                    + '<input type="password" id="_unlock_pwd_input" style="width:100%;padding:12px 14px;border:2px solid #e2e8f0;border-radius:8px;font-size:1rem;box-sizing:border-box;outline:none;" placeholder="输入安全口令" autofocus autocomplete="current-password">'
-                    + '</div>'
-                    + '<div style="display:flex;gap:10px;justify-content:flex-end;">'
-                    + '<button id="_unlock_cancel" style="padding:10px 22px;border:2px solid #e2e8f0;background:#fff;color:#64748b;border-radius:8px;font-size:0.9rem;font-weight:600;cursor:pointer;">取消</button>'
-                    + '<button id="_unlock_ok" style="padding:10px 22px;border:none;background:linear-gradient(135deg,#2563eb,#3b82f6);color:#fff;border-radius:8px;font-size:0.9rem;font-weight:600;cursor:pointer;">解锁</button>'
-                    + '</div></div>';
-
-                document.body.appendChild(modal);
-
-                document.getElementById('_unlock_cancel').onclick = function() {
-                    modal.parentNode.removeChild(modal);
-                    resolve(null);
-                };
-                document.getElementById('_unlock_ok').onclick = function() {
-                    var pwd = document.getElementById('_unlock_pwd_input').value;
-                    if (!pwd) { alert('请输入口令'); return; }
-                    modal.parentNode.removeChild(modal);
-                    resolve(pwd);
-                };
-                document.getElementById('_unlock_pwd_input').addEventListener('keydown', function(e) {
-                    if (e.key === 'Enter') document.getElementById('_unlock_ok').click();
-                });
-                setTimeout(function() {
-                    var inp = document.getElementById('_unlock_pwd_input');
-                    if (inp) inp.focus();
-                }, 100);
-            });
-        };
-
-        /**
-         * 加密保存 API Key 到 localStorage
-         * @param {string} key - 明文 API Key
-         * @param {string} storageKey - localStorage 的键名（默认 ds_api_key_v1）
-         * @returns {Promise<boolean>} 是否成功
-         */
-        window.saveEncryptedApiKey = async function(key, storageKey) {
+        window.saveEncryptedApiKey = function(key, storageKey) {
             storageKey = storageKey || 'ds_api_key_v1';
-
-            // 如果不支持加密，降级为明文存储（带警告）
-            if (!window.isCryptoSupported()) {
-                console.warn('[security] Web Crypto 不可用，API Key 将以明文存储');
-                localStorage.setItem(storageKey, key);
-                _cryptoCache.plainKey = key;
-                return true;
-            }
-
-            // 如果已有口令（本次会话中已解锁过），直接用缓存口令加密
-            if (_cryptoCache.password) {
-                try {
-                    var encrypted = await window.cryptoEncrypt(key, _cryptoCache.password);
-                    localStorage.setItem(storageKey, JSON.stringify({ e: 1, d: encrypted }));
-                    _cryptoCache.plainKey = key;
-                    console.log('[security] API Key 已加密保存 ✓');
-                    return true;
-                } catch(e) {
-                    console.error('[security] 加密失败:', e);
-                    return false;
-                }
-            }
-
-            // 首次设置：弹出口令输入框
-            var result = await window.showPasswordPrompt({
-                title: '🔐 设置安全口令',
-                message: '检测到你要保存 API Key。\n\n请设置一个**安全口令**来加密保护它。口令不会保存在设备上，下次使用时需要重新输入。\n\n⚠️ 请牢记口令，忘记后将无法恢复 API Key！'
-            });
-
-            if (!result || !result.password) {
-                // 用户取消了 — 仍保存为明文（用户选择）
-                console.warn('[security] 用户取消加密，API Key 以明文存储');
-                localStorage.setItem(storageKey, key);
-                _cryptoCache.plainKey = key;
-                return true;
-            }
-
-            try {
-                var encrypted = await window.cryptoEncrypt(key, result.password);
-                localStorage.setItem(storageKey, JSON.stringify({ e: 1, d: encrypted }));
-                _cryptoCache.password = result.password;
-                _cryptoCache.plainKey = key;
-                _cryptoCache.verified = true;
-                console.log('[security] API Key 已加密保存 ✓（首次设口令）');
-                return true;
-            } catch(e) {
-                console.error('[security] 首次加密失败:', e);
-                return false;
-            }
+            localStorage.setItem(storageKey, key);
+            return true;
         };
 
         /**
-         * 读取并解密 API Key（从 localStorage）
-         * @param {string} storageKey - localStorage 的键名
-         * @returns {Promise<string|null>} 明文 API Key，或 null
-         *
-         * 使用方式:
-         *   var apiKey = await getDecryptedApiKey();  // 自动处理加密/明文/口令提示
+         * 从 localStorage 读取 API Key
+         * @param {string} storageKey - localStorage 键名
+         * @returns {string|null} API Key 或 null
          */
         window.getDecryptedApiKey = async function(storageKey) {
             storageKey = storageKey || 'ds_api_key_v1';
-            var stored = localStorage.getItem(storageKey);
-
-            // 无数据
-            if (!stored) return null;
-
-            // --- 明文格式（旧版或用户取消加密）---
-            if (!window.isEncryptedValue(stored)) {
-                // 明文且已在内存缓存中，直接返回
-                if (_cryptoCache.plainKey === stored) return stored;
-
-                // 检测到明文 Key 且支持加密 → 提示用户升级为加密
-                if (window.isCryptoSupported() && stored.startsWith('sk-')) {
-                    console.log('[security] 检测到明文 API Key，建议加密保护');
-                    // 不阻塞地返回明文，但标记需要迁移
-                    _cryptoCache.plainKey = stored;
-                    return stored;
-                }
-                return stored;
-            }
-
-            // --- 加密格式 ---
-            if (!window.isCryptoSupported()) {
-                console.error('[security] API Key 已加密但当前浏览器不支持解密');
-                alert('API Key 已加密存储，但当前浏览器不支持解密。\n请使用 Chrome/Firefox/Safari 等现代浏览器。');
-                return null;
-            }
-
-            // 已有缓存的有效口令和明文
-            if (_cryptoCache.verified && _cryptoCache.plainKey) return _cryptoCache.plainKey;
-
-            // 需要用户输入口令来解密
-            var pwd = await window.showUnlockPrompt(
-                '🔐 解锁 API Key',
-                'API Key 已加密存储，请输入安全口令解锁。'
-            );
-
-            if (!pwd) return null; // 用户取消
-
-            try {
-                var encObj = JSON.parse(stored);
-                var decrypted = await window.cryptoDecrypt(encObj.d, pwd);
-                _cryptoCache.password = pwd;
-                _cryptoCache.plainKey = decrypted;
-                _cryptoCache.verified = true;
-                console.log('[security] API Key 解密成功 ✓');
-                return decrypted;
-            } catch(e) {
-                console.error('[security] 解密失败（口令可能错误）:', e);
-                alert('口令错误或数据已损坏，无法解密 API Key。');
-                _cryptoCache.verified = false;
-                return null;
-            }
+            return localStorage.getItem(storageKey) || null;
         };
 
-        /**
-         * 清除内存中的口令和明文 Key 缓存（调用时机：退出/超时）
-         */
-        window.clearCryptoCache = function() {
-            _cryptoCache.password = null;
-            _cryptoCache.plainKey = null;
-            _cryptoCache.verified = false;
-        };
+        window.clearCryptoCache = function() {};
+        window.isEncryptedValue = function() { return false; };
+
 
 
         // ============================================================

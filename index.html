@@ -120,10 +120,6 @@
     <link rel="stylesheet" href="src/css/components.css">
     <link rel="stylesheet" href="src/css/modules.css">
     <link rel="stylesheet" href="src/css/responsive.css">
-    <!-- 无障碍：屏幕阅读器专用样式 -->
-    <style>
-        .sr-only { position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0; }
-    </style>
 </head>
 <body>
     <header class="header">
@@ -159,24 +155,24 @@
             </div>
             <!-- 移动端：当前tab名称 + 汉堡按钮 -->
             <span class="nav-current-label" id="navCurrentLabel">📖 检查手册</span>
-            <button class="nav-toggle" id="navToggle" onclick="toggleNav()" aria-label="展开导航菜单" aria-expanded="false" aria-controls="mainNav">
+            <button class="nav-toggle" id="navToggle" onclick="toggleNav()">
                 <span></span><span></span><span></span>
             </button>
-            <nav class="nav" id="mainNav" role="tablist">
+            <nav class="nav" id="mainNav">
                 <!-- 检查手册移到最前面 -->
-                <button class="nav-btn active" onclick="switchTab('handbook')" id="tab-handbook" role="tab" aria-selected="true" aria-controls="panel-handbook"><span>📖</span> 检查手册</button>
-                <button class="nav-btn" onclick="switchTab('issue')" id="tab-issue" role="tab" aria-selected="false" aria-controls="panel-issue"><span>📊</span> 检查信息</button>
-                <button class="nav-btn" onclick="switchTab('rule')" id="tab-rule" role="tab" aria-selected="false" aria-controls="panel-rule"><span>📋</span> 规章制度</button>
-                <button class="nav-btn" onclick="switchTab('diary')" id="tab-diary" role="tab" aria-selected="false" aria-controls="panel-diary"><span>📝</span> 工作日志</button>
-                <button class="nav-btn" onclick="switchTab('phone')" id="tab-phone" role="tab" aria-selected="false" aria-controls="panel-phone"><span>📞</span> 车站电话</button>
-                <button class="nav-btn" onclick="switchTab('doubao')" id="tab-doubao" role="tab" aria-selected="false" aria-controls="panel-doubao"><span>🤖</span> 智能助手</button>
+                <button class="nav-btn active" onclick="switchTab('handbook')" id="tab-handbook"><span>📖</span> 检查手册</button>
+                <button class="nav-btn" onclick="switchTab('issue')" id="tab-issue"><span>📊</span> 检查信息</button>
+                <button class="nav-btn" onclick="switchTab('rule')" id="tab-rule"><span>📋</span> 规章制度</button>
+                <button class="nav-btn" onclick="switchTab('diary')" id="tab-diary"><span>📝</span> 工作日志</button>
+                <button class="nav-btn" onclick="switchTab('phone')" id="tab-phone"><span>📞</span> 车站电话</button>
+                <button class="nav-btn" onclick="switchTab('doubao')" id="tab-doubao"><span>🤖</span> 智能助手</button>
             </nav>
         </div>
     </header>
 
     <main class="main">
         <!-- 检查手册模块 (移最前，使用标准卡片样式) -->
-        <div id="panel-handbook" class="panel active" role="tabpanel" aria-labelledby="tab-handbook">
+        <div id="panel-handbook" class="panel active">
             <div class="card">
                 <div class="card-header">
                     <div class="card-title">
@@ -263,7 +259,7 @@
         </div>
 
         <!-- 检查信息模块 (原第一，现第二) -->
-        <div id="panel-issue" class="panel" role="tabpanel" aria-labelledby="tab-issue">
+        <div id="panel-issue" class="panel">
             <div class="card">
                 <div class="card-header">
                     <div class="card-title">
@@ -294,7 +290,7 @@
                     </div>
                     <input type="file" id="issue-fileInput" accept=".xlsx,.xls,.json" style="display:none;">
                     
-                    <div class="search-box" role="search" aria-label="检查信息搜索">
+                    <div class="search-box">
                         <div id="issue-keywordContainer" class="keyword-list"></div>
                         <button class="btn-add" id="issue-btnAdd" onclick="issueAddKeyword()">+ 添加关键词 (最多4个)</button>
                         <div class="search-actions">
@@ -311,14 +307,14 @@
                         <button class="btn btn-secondary" id="issue-toggleLowMatchBtn" onclick="issueToggleLowMatch()" style="display:none;">📊 低匹配结果</button>
                     </div>
                     
-                    <div id="issue-results" role="region" aria-live="polite" aria-label="检查信息搜索结果"></div>
-                    <div id="issue-lowMatchResults" style="display:none;" role="region" aria-live="polite" aria-label="低匹配搜索结果"></div>
+                    <div id="issue-results"></div>
+                    <div id="issue-lowMatchResults" style="display:none;"></div>
                 </div>
             </div>
         </div>
 
         <!-- 规章制度模块 (不变) -->
-        <div id="panel-rule" class="panel" role="tabpanel" aria-labelledby="tab-rule">
+        <div id="panel-rule" class="panel">
             <div class="card">
                 <div class="card-header">
                     <div class="card-title">
@@ -352,7 +348,7 @@
                         </select>
                     </div>
 
-                    <div class="search-box" role="search" aria-label="规章制度搜索">
+                    <div class="search-box">
                         <div id="rule-keywordContainer" class="keyword-list"></div>
                         <button class="btn-add" id="rule-btnAdd">+ 添加关键词 (最多4个)</button>
                         
@@ -371,13 +367,13 @@
                         <span class="results-count" id="rule-resultCount">0 项</span>
                     </div>
 
-                    <div id="rule-resultsList" style="display: none;" role="region" aria-live="polite" aria-label="规章制度搜索结果"></div>
+                    <div id="rule-resultsList" style="display: none;"></div>
                 </div>
             </div>
         </div>
 
         <!-- 工作日志模块 -->
-        <div id="panel-diary" class="panel" role="tabpanel" aria-labelledby="tab-diary">
+        <div id="panel-diary" class="panel">
             <div class="card">
                 <div class="card-header">
                     <div class="card-title">
@@ -465,7 +461,7 @@
         </div>
 
         <!-- 车站电话模块 (不变) -->
-        <div id="panel-phone" class="panel" role="tabpanel" aria-labelledby="tab-phone">
+        <div id="panel-phone" class="panel">
             <div class="card">
                 <div class="card-header">
                     <div class="card-title">
@@ -496,9 +492,9 @@
                     </div>
                     <input type="file" id="phone-fileInput" accept=".xlsx,.xls,.json" style="display:none;">
 
-                    <div class="search-box" role="search" aria-label="车站电话搜索">
+                    <div class="search-box">
                         <div class="phone-search-bar">
-                            <input type="text" id="phone-searchInput" placeholder="输入站名、单位或线名" aria-label="车站电话搜索关键词">
+                            <input type="text" id="phone-searchInput" placeholder="输入站名、单位或线名">
                             <button class="btn btn-primary btn-lg" onclick="phoneDoSearch()">🔍 搜索</button>
                             <button class="btn btn-secondary btn-lg" onclick="phoneClearSearch()">重置</button>
                         </div>
@@ -509,13 +505,13 @@
                         <span class="results-count" id="phone-resultCount">0 条</span>
                     </div>
 
-                    <div id="phone-results" class="result-list" style="display:none;" role="region" aria-live="polite" aria-label="车站电话查询结果"></div>
+                    <div id="phone-results" class="result-list" style="display:none;"></div>
                 </div>
             </div>
         </div>
 
         <!-- 智能查询模块 -->
-        <div id="panel-doubao" class="panel" role="tabpanel" aria-labelledby="tab-doubao">
+        <div id="panel-doubao" class="panel">
             <div class="card">
                 <div class="card-header">
                     <div class="card-title">
@@ -684,7 +680,7 @@
                             <span style="font-size:0.78rem;color:var(--text-secondary);">💬 DeepSeek 对话</span>
                         </div>
                         <!-- 对话区 -->
-                        <div id="ds-chat-box" style="display:none;overflow-y:auto;border:1px solid var(--border);border-radius:var(--radius);padding:14px;background:#f8fafc;flex-direction:column;gap:10px;flex:1;min-height:200px;max-height:calc(100vh - 360px);" role="log" aria-live="polite" aria-label="AI 对话消息"></div>
+                        <div id="ds-chat-box" style="display:none;overflow-y:auto;border:1px solid var(--border);border-radius:var(--radius);padding:14px;background:#f8fafc;flex-direction:column;gap:10px;flex:1;min-height:200px;max-height:calc(100vh - 360px);"></div>
                         <!-- ========== 智能助手增强工具栏 ========== -->
                         <div id="agent-toolbar" style="margin-bottom: 12px; padding: 8px; background: #f8fafc; border-radius: 12px; border: 1px solid #e2e8f0; display: flex; flex-wrap: wrap; align-items: center; gap: 10px;">
                           <select id="expertRole" style="background: white; border: 1px solid #cbd5e1; border-radius: 20px; padding: 5px 12px; font-size: 0.85rem;">
@@ -992,11 +988,11 @@
     </footer>
 
     <!-- 备忘弹窗 -->
-    <div id="memo-modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="memo-title">
+    <div id="memo-modal" class="modal">
         <div class="modal-content memo-modal-content">
             <div class="modal-header">
                 <div class="modal-title" id="memo-title">🔔 新建备忘提醒</div>
-                <button class="modal-close" onclick="closeMemoModal()" aria-label="关闭备忘弹窗">✕</button>
+                <button class="modal-close" onclick="closeMemoModal()">✕</button>
             </div>
             <div class="modal-body">
                 <!-- 备忘列表 -->
@@ -1027,7 +1023,7 @@
     </div>
 
     <!-- 原有模态框 (规章制度相关需完整保留) -->
-    <div id="issue-clearModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="issue-clearTitle">
+    <div id="issue-clearModal" class="modal">
         <div class="modal-content">
             <div class="modal-header"><div class="modal-title" id="issue-clearTitle">⚠️ 确认清空数据</div></div>
             <div class="modal-body">
@@ -1040,7 +1036,7 @@
             </div>
         </div>
     </div>
-    <div id="issue-importModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="issue-importTitle">
+    <div id="issue-importModal" class="modal">
         <div class="modal-content">
             <div class="modal-header"><div class="modal-title" id="issue-importTitle">📥 正在导入数据</div></div>
             <div class="modal-body" style="text-align:center;">
@@ -1051,7 +1047,7 @@
     </div>
 
     <!-- 规章制度模态框组 (必须完整) -->
-    <div id="rule-importModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="rule-importTitle">
+    <div id="rule-importModal" class="modal">
         <div class="modal-content">
             <div class="modal-header"><div class="modal-title" id="rule-importTitle">📥 导入规章</div></div>
             <div class="modal-body">
@@ -1074,7 +1070,7 @@
         </div>
     </div>
 
-    <div id="rule-catalogModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="rule-catalogTitle">
+    <div id="rule-catalogModal" class="modal">
         <div class="modal-content wide">
             <div class="modal-header"><div class="modal-title" id="rule-catalogTitle">📋 规章目录 <span id="rule-catalogStats" style="font-size:0.8rem;font-weight:normal;opacity:0.8;margin-left:10px;">共 0 条</span></div></div>
             <div class="modal-body">
@@ -1096,7 +1092,7 @@
 
 
 
-    <div id="rule-editModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="rule-editTitle">
+    <div id="rule-editModal" class="modal">
         <div class="modal-content">
             <div class="modal-header"><div class="modal-title" id="rule-editTitle">✏️ 编辑规章</div></div>
             <div class="modal-body">
@@ -1120,7 +1116,7 @@
         </div>
     </div>
 
-    <div id="rule-exportModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="rule-exportTitle">
+    <div id="rule-exportModal" class="modal">
         <div class="modal-content">
             <div class="modal-header"><div class="modal-title" id="rule-exportTitle">📤 导出规章</div></div>
             <div class="modal-body">
@@ -1152,11 +1148,11 @@
     </div>
 
     <!-- 规章全文查看模态框（带关键词高亮 · 响应式宽度） -->
-    <div id="rule-fullViewModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="rule-fullViewTitle">
+    <div id="rule-fullViewModal" class="modal">
         <div class="modal-content">
             <div class="modal-header" style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
                 <div class="modal-title" id="rule-fullViewTitle" style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">规章全文</div>
-                <button onclick="closeModal('rule-fullViewModal')" aria-label="关闭规章全文" style="background:rgba(255,255,255,0.2);border:none;color:white;width:30px;height:30px;border-radius:50%;cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center;flex-shrink:0;">✕</button>
+                <button onclick="closeModal('rule-fullViewModal')" style="background:rgba(255,255,255,0.2);border:none;color:white;width:30px;height:30px;border-radius:50%;cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center;flex-shrink:0;">✕</button>
             </div>
             <div class="modal-body" style="padding:20px;">
                 <!-- 规章信息行 -->
@@ -1192,7 +1188,7 @@
     </div>
 
     <!-- 新增手册模块的导入确认模态框 -->
-    <div class="modal" id="handbook-importModal" role="dialog" aria-modal="true" aria-labelledby="handbook-importTitle">
+    <div class="modal" id="handbook-importModal">
         <div class="modal-content">
             <div class="modal-header"><div class="modal-title" id="handbook-importTitle">确认导入</div></div>
             <div class="modal-body" id="handbook-importMessage">正在处理...</div>

@@ -46,54 +46,19 @@
             let _acAbortController = null; // 用于停止AI对规生成
 
             /**
-             * 获取 API Key（统一入口，自动处理加密/明文/缓存）
+             * 获取 API Key（统一入口）
              * @returns {Promise<string>} 明文 API Key（空字符串表示无 Key）
-             *
-             * 优先级：
-             *   1. 内存缓存 dsApiKey（最快）
-             *   2. cryptoCache（utils.js 解密缓存）
-             *   3. localStorage 明文直读
-             *   4. 触发解密弹窗 → 异步解密
              */
             async function _getApiKey() {
-                // 1. 内存中有明文，直接返回
                 if (dsApiKey) return dsApiKey;
-
-                // 2. 检查 utils.js 的解密缓存
-                if (typeof window.getDecryptedApiKey === 'function') {
-                    var decrypted = await window.getDecryptedApiKey(DS_API_KEY_STORAGE);
-                    if (decrypted) { dsApiKey = decrypted; return decrypted; }
-                }
-
-                // 3. 最后尝试 localStorage 明文（兼容旧格式）
                 var raw = localStorage.getItem(DS_API_KEY_STORAGE) || '';
-                if (raw && !window.isEncryptedValue(raw)) { dsApiKey = raw; return raw; }
-
+                if (raw) { dsApiKey = raw; return raw; }
                 return '';
             }
 
             // ---- 初始化 ----
             function dsInit() {
-                var _rawKey = localStorage.getItem(DS_API_KEY_STORAGE) || '';
-                // 检测是否为加密格式（JSON {e:1,d:...}）
-                if (_rawKey && typeof window.isEncryptedValue === 'function' && window.isEncryptedValue(_rawKey)) {
-                    // 加密格式：暂不加载明文，标记需要解锁
-                    dsApiKey = '';
-                    console.log('[doubao] API Key 已加密，将在首次使用时提示输入口令');
-                    // 尝试异步解密（不阻塞初始化）
-                    if (typeof window.getDecryptedApiKey === 'function') {
-                        window.getDecryptedApiKey(DS_API_KEY_STORAGE).then(function(decrypted) {
-                            if (decrypted) { dsApiKey = decrypted; updateApiStatusBadge(); }
-                        }).catch(function(){});
-                    }
-                } else {
-                    // 明文格式：直接加载
-                    dsApiKey = _rawKey;
-                    // 检测到明文 sk- Key 且支持加密 → 后台提示升级（非阻塞）
-                    if (_rawKey && _rawKey.startsWith('sk-') && typeof window.isCryptoSupported === 'function' && window.isCryptoSupported()) {
-                        console.log('[doubao] 💡 检测到明文 API Key，建议在设置中重新保存以启用加密');
-                    }
-                }
+                dsApiKey = localStorage.getItem(DS_API_KEY_STORAGE) || '';
                 dsApiUrl = localStorage.getItem(DS_API_URL_STORAGE) || DS_DEFAULT_API_URL;
                 dsModel  = localStorage.getItem(DS_MODEL_STORAGE) || DS_DEFAULT_MODEL;
                 
@@ -522,22 +487,9 @@
                 var key = document.getElementById('modal-apikey').value.trim();
                 if (!url) { alert('请输入 API 地址'); return; }
                 if (!model) { alert('请输入模型名称'); return; }
-                // 优先使用新输入的 key，若未填则保留已有 key
                 if (key) {
-                    // 使用加密存储（如果可用）
-                    if (typeof window.saveEncryptedApiKey === 'function') {
-                        try {
-                            await window.saveEncryptedApiKey(key, DS_API_KEY_STORAGE);
-                            dsApiKey = key;
-                        } catch(e) {
-                            console.warn('[doubao] 加密保存失败，降级为明文:', e.message);
-                            localStorage.setItem(DS_API_KEY_STORAGE, key);
-                            dsApiKey = key;
-                        }
-                    } else {
-                        localStorage.setItem(DS_API_KEY_STORAGE, key);
-                        dsApiKey = key;
-                    }
+                    localStorage.setItem(DS_API_KEY_STORAGE, key);
+                    dsApiKey = key;
                 } else if (!dsApiKey) {
                     alert('请输入 API Key');
                     return;
@@ -555,8 +507,6 @@
                 localStorage.removeItem(DS_API_KEY_STORAGE);
                 localStorage.removeItem(DS_API_URL_STORAGE);
                 localStorage.removeItem(DS_MODEL_STORAGE);
-                // 清除加密缓存
-                if (typeof window.clearCryptoCache === 'function') window.clearCryptoCache();
                 document.getElementById('modal-apiurl').value = DS_DEFAULT_API_URL;
                 document.getElementById('modal-model').value = DS_DEFAULT_MODEL;
                 document.getElementById('modal-apikey').value = '';
