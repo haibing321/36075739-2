@@ -27,18 +27,9 @@
             const DB_NAME = 'RailwayRuleDB', STORE_NAME = 'ruleCollection', IMAGE_STORE_NAME = 'rule_images', DB_VERSION = 3;
             let db = null;
             function initRuleDB() {
-                return new Promise((resolve, reject) => {
-                    if (db) return resolve(db);
-                    const request = indexedDB.open(DB_NAME, DB_VERSION);
-                    request.onerror = () => reject(request.error);
-                    request.onsuccess = () => {
-                        db = request.result;
-                        // 当其他标签页升级数据库版本时，主动关闭当前连接
-                        db.onversionchange = () => { db.close(); db = null; };
-                        resolve(db);
-                    };
-                    request.onupgradeneeded = (e) => {
-                        const database = e.target.result;
+                // 首次注册 schema 到 dbManager（仅注册一次）
+                if (!window._ruleDBRegistered) {
+                    window.dbManager.register('RailwayRuleDB', DB_VERSION, function(database, e) {
                         // 无论什么版本升级，确保两个 store 都存在即可
                         if (!database.objectStoreNames.contains(STORE_NAME)) {
                             const store = database.createObjectStore(STORE_NAME, { keyPath: 'id' });
@@ -47,8 +38,12 @@
                         if (!database.objectStoreNames.contains(IMAGE_STORE_NAME)) {
                             database.createObjectStore(IMAGE_STORE_NAME, { keyPath: 'id' });
                         }
-                        // v3: 无结构变更，仅版本号追齐
-                    };
+                    });
+                    window._ruleDBRegistered = true;
+                }
+                return window.dbManager.getDB('RailwayRuleDB').then(function(database) {
+                    db = database;
+                    return db;
                 });
             }
 

@@ -314,26 +314,18 @@
                         standardRules = [{ id: 1, data: bm.rules }];
                     }
                     // 使用 store.put 保留 id=1（不能用 writeIndexedDB，会移除 id）
+                    // 使用 dbManager 获取共享连接恢复规章数据
                     await new Promise(function(resolve, reject) {
-                        var req = indexedDB.open('RailwayRuleDB', 3);
-                        req.onupgradeneeded = function(e) {
-                            var db = e.target.result;
-                            if (!db.objectStoreNames.contains('ruleCollection')) {
-                                db.createObjectStore('ruleCollection', { keyPath: 'id' });
-                            }
-                        };
-                        req.onsuccess = function() {
-                            var db = req.result;
+                        window.dbManager.getDB('RailwayRuleDB').then(function(db) {
                             var tx = db.transaction('ruleCollection', 'readwrite');
                             var store = tx.objectStore('ruleCollection');
                             store.clear();
                             for (var i = 0; i < standardRules.length; i++) {
                                 store.put(standardRules[i]);
                             }
-                            tx.oncomplete = function() { db.close(); resolve(); };
+                            tx.oncomplete = function() { resolve(); };
                             tx.onerror = function() { reject(tx.error); };
-                        };
-                        req.onerror = function() { reject(req.error); };
+                        }).catch(reject);
                     });
                     console.log('已恢复 ' + standardRules[0].data.length + ' 条规章制度');
                 } else {

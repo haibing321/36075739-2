@@ -73,6 +73,19 @@
 document.addEventListener('DOMContentLoaded', function() {
     console.log('%c安监智能查询系统 · 初始化开始', 'color:#1a365d;font-weight:bold;');
 
+    // 启动时检查存储配额（延迟3秒等各模块初始化完成）
+    if (window.storageManager) {
+        setTimeout(function() {
+            window.storageManager.warnIfNearLimit(80).then(function(nearLimit) {
+                if (!nearLimit) {
+                    window.storageManager.checkQuota().then(function(info) {
+                        console.log('[storage] 存储正常: ' + info.usageMB + '/' + info.quotaMB + ' MB (' + info.usagePercent.toFixed(1) + '%)');
+                    });
+                }
+            });
+        }, 3000);
+    }
+
     // 各模块的初始化由各自的 IIFE 自行处理
     // 跨模块协调逻辑如下：
 });

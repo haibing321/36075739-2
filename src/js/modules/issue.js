@@ -9,20 +9,20 @@
             let currentPage = 1, pageSize = 20, totalPages = 1, allFilteredResults = [];
 
             async function initDB() {
-                return new Promise((resolve, reject) => {
-                    const request = indexedDB.open(DB_NAME, DB_VERSION);
-                    request.onerror = () => reject(request.error);
-                    request.onsuccess = () => { db = request.result; resolve(db); };
-                    request.onupgradeneeded = (e) => {
-                        const database = e.target.result;
+                // 首次注册 schema 到 dbManager（仅注册一次）
+                if (!window._issueDBRegistered) {
+                    window.dbManager.register('RailwayIssueDB_v2', 1, function(database, e) {
                         if (!database.objectStoreNames.contains(STORE_NAME)) {
                             const store = database.createObjectStore(STORE_NAME, { keyPath: 'id', autoIncrement: true });
                             store.createIndex('性质', '性质', { unique: false });
                             store.createIndex('datetime', 'datetime', { unique: false });
                             store.createIndex('category', 'category', { unique: false });
                         }
-                    };
-                });
+                    });
+                    window._issueDBRegistered = true;
+                }
+                db = await window.dbManager.getDB('RailwayIssueDB_v2');
+                return db;
             }
 
             async function saveData(dataArray) {
@@ -75,18 +75,43 @@
                     const data = await loadData(), count = data.length;
                     let sizeMB = 0;
                     if (count > 0) {
-                        const sample = JSON.stringify(data.slice(0, 10));
-                        const avgSize = sample.length / Math.min(10, count);
-                        sizeMB = (avgSize * count * 2 / 1024 / 1024).toFixed(2);
+                        // 使用 JSON.stringify 精确计算当前模块数据大小
+                        const jsonStr = JSON.stringify(data);
+                        sizeMB = (jsonStr.length / 1024 / 1024).toFixed(2);
                     }
                     document.getElementById('issue-recordCount').textContent = count + ' 条';
-                    document.getElementById('issue-storageText').textContent = sizeMB + ' MB';
-                    const percent = Math.min((sizeMB / 50) * 100, 100);
-                    const bar = document.getElementById('issue-storageBar');
-                    bar.style.width = percent + '%';
-                    if (percent > 80) bar.className = 'storage-fill danger';
-                    else if (percent > 60) bar.className = 'storage-fill warning';
-                    else bar.className = 'storage-fill';
+
+                    // 尝试使用 storageManager 获取真实配额
+                    if (window.storageManager) {
+                        try {
+                            var quotaInfo = await window.storageManager.checkQuota();
+                            document.getElementById('issue-storageText').textContent =
+                                parseFloat(sizeMB) + ' / ' + quotaInfo.quotaMB + ' MB';
+                            const percent = Math.min((parseFloat(sizeMB) / Math.max(quotaInfo.quotaMB, 1)) * 100, 100);
+                            var bar = document.getElementById('issue-storageBar');
+                            bar.style.width = percent + '%';
+                            if (percent > 80) bar.className = 'storage-fill danger';
+                            else if (percent > 60) bar.className = 'storage-fill warning';
+                            else bar.className = 'storage-fill';
+                        } catch(qe) {
+                            // 降级为原来的 50MB 硬编码显示
+                            document.getElementById('issue-storageText').textContent = sizeMB + ' MB';
+                            const percent = Math.min((sizeMB / 50) * 100, 100);
+                            var bar2 = document.getElementById('issue-storageBar');
+                            bar2.style.width = percent + '%';
+                            if (percent > 80) bar2.className = 'storage-fill danger';
+                            else if (percent > 60) bar2.className = 'storage-fill warning';
+                            else bar2.className = 'storage-fill';
+                        }
+                    } else {
+                        document.getElementById('issue-storageText').textContent = sizeMB + ' MB';
+                        const percent = Math.min((sizeMB / 50) * 100, 100);
+                        var bar3 = document.getElementById('issue-storageBar');
+                        bar3.style.width = percent + '%';
+                        if (percent > 80) bar3.className = 'storage-fill danger';
+                        else if (percent > 60) bar3.className = 'storage-fill warning';
+                        else bar3.className = 'storage-fill';
+                    }
                 } catch (e) {}
             }
 
@@ -164,6 +189,108 @@
                 return '空白';
             }
 
+            // ========== Fuse.js 模糊搜索引擎 ==========
+            // 替代原来的 O(n) 线性 includes() 扫描
+            // 支持模糊匹配、加权评分、容错输入
+            var _fuseInstance = null;   // Fuse 实例缓存
+            var _fuseDataVersion = 0;   // 数据版本号（变化时重建索引）
+
+            /**
+             * 获取/创建 Fuse 实例（懒初始化 + 缓存）
+             * @param {Array} data - 检查信息数据数组
+             * @returns {Object|null} Fuse 实例，不可用时返回 null
+             */
+            function getFuseInstance(data) {
+                if (typeof Fuse === 'undefined') return null;
+                if (_fuseInstance && _fuseDataVersion === data.length) return _fuseInstance;
+
+                try {
+                    _fuseInstance = new Fuse(data, {
+                        keys: [
+                            { name: '性质', weight: 0.3 },
+                            { name: 'category', weight: 0.2 },
+                            { name: 'content', weight: 0.4 },
+                            { name: 'regulation', weight: 0.1 }
+                        ],
+                        threshold: 0.35,           // 低阈值=更宽松的模糊匹配（适合中文）
+                        includeScore: true,
+                        includeMatches: true,
+                        minMatchCharLength: 1,     // 最少匹配字符数
+                        useExtendedSearch: true,   // 支持高级查询语法
+                        ignoreLocation: true,      // 忽略词位置（短文本场景更适合）
+                        findAllMatches: true       // 找所有匹配项而非仅最佳匹配
+                    });
+                    _fuseDataVersion = data.length;
+                    console.log('[search] Fuse.js 索引已创建 (' + data.length + ' 条)');
+                    return _fuseInstance;
+                } catch(e) {
+                    console.warn('[search] Fuse.js 初始化失败:', e.message);
+                    return null;
+                }
+            }
+
+            /**
+             * 使用 Fuse.js 执行模糊搜索（多关键词 OR 合并）
+             * @param {Array} data - 数据集
+             * @param {string[]} keywords - 关键词数组
+             * @returns {{ results: Array, method: string }}
+             */
+            function fuseSearch(data, keywords) {
+                var fuse = getFuseInstance(data);
+                if (!fuse) return null; // 信号给调用方使用 fallback
+
+                var resultMap = {};  // { itemIndex: { item, scores: [], maxScore: number } }
+
+                keywords.forEach(function(kw) {
+                    if (!kw || kw.trim().length === 0) return;
+                    try {
+                        var hits = fuse.search(kw.trim());
+                        hits.forEach(function(hit) {
+                            var idx = data.indexOf(hit.item);
+                            if (idx === -1) return;
+                            if (!resultMap[idx]) {
+                                resultMap[idx] = { item: hit.item, scores: [], maxScore: 0 };
+                            }
+                            // Fuse score: 0=完美匹配, 1=不匹配 → 转换为正分
+                            var scorePercent = Math.round((1 - (hit.score || 0)) * 100);
+                            resultMap[idx].scores.push(scorePercent);
+                            if (scorePercent > resultMap[idx].maxScore) {
+                                resultMap[idx].maxScore = scorePercent;
+                            }
+                        });
+                    } catch(e) {
+                        console.warn('[search] 关键词 "' + kw + '" 搜索出错:', e.message);
+                    }
+                });
+
+                // 转换为数组并计算综合匹配率
+                var results = [];
+                Object.keys(resultMap).forEach(function(idx) {
+                    var entry = resultMap[idx];
+                    var matchedCount = entry.scores.length;
+                    var avgScore = entry.scores.reduce(function(a, b) { return a + b; }, 0) / matchedCount;
+                    var matchRate = Math.round((matchedCount / keywords.length) * 100);
+
+                    results.push({
+                        ...entry.item,
+                        matchCount: matchedCount,
+                        totalKw: keywords.length,
+                        matchRate: matchRate,
+                        fuseScore: Math.round(avgScore),
+                        xingzhi: getXingzhi(entry.item)
+                    });
+                });
+
+                // 排序：先按匹配率，再按 Fuse 评分，最后按时间倒序
+                results.sort(function(a, b) {
+                    if (b.matchRate !== a.matchRate) return b.matchRate - a.matchRate;
+                    if ((b.fuseScore || 0) !== (a.fuseScore || 0)) return (b.fuseScore || 0) - (a.fuseScore || 0);
+                    return new Date(b.datetime || 0) - new Date(a.datetime || 0);
+                });
+
+                return { results: results, method: 'fuse' };
+            }
+
             window.issueDoSearch = async function() {
                 const keywords = [];
                 for (let i = 1; i <= keywordNum; i++) {
@@ -176,32 +303,42 @@
                 const data = dataCache.length > 0 ? dataCache : await loadData();
 
                 setTimeout(() => {
-                    let results = [];
-                    data.forEach(item => {
-                        const xingzhi = getXingzhi(item);
-                        let text = '';
-                        if (searchFields.includes('性质')) text += xingzhi + ' ';
-                        if (searchFields.includes('category')) text += (item.category || '') + ' ';
-                        if (searchFields.includes('content')) text += (item.content || '') + ' ';
-                        if (item.regulation) text += (item.regulation || '') + ' ';
-                        text = text.toLowerCase();
+                    // ===== 优先使用 Fuse.js 模糊搜索 =====
+                    var fuseResult = fuseSearch(data, keywords);
 
-                        let match = 0;
-                        keywords.forEach(k => {
-                            if (text.includes(k.toLowerCase())) match++;
+                    if (fuseResult && fuseResult.results) {
+                        // Fuse.js 搜索成功
+                        results = fuseResult.results;
+                        console.log('[search] Fuse.js 模糊搜索: ' + results.length + ' 条结果');
+                    } else {
+                        // Fallback: 原有线性 includes() 扫描
+                        results = [];
+                        data.forEach(item => {
+                            const xingzhi = getXingzhi(item);
+                            let text = '';
+                            if (searchFields.includes('性质')) text += xingzhi + ' ';
+                            if (searchFields.includes('category')) text += (item.category || '') + ' ';
+                            if (searchFields.includes('content')) text += (item.content || '') + ' ';
+                            if (item.regulation) text += (item.regulation || '') + ' ';
+                            text = text.toLowerCase();
+
+                            let match = 0;
+                            keywords.forEach(k => {
+                                if (text.includes(k.toLowerCase())) match++;
+                            });
+
+                            let matched = (searchMode === 'AND') ? (match === keywords.length) : (match > 0);
+                            if (matched) {
+                                const matchRate = Math.round((match / keywords.length) * 100);
+                                results.push({ ...item, matchCount: match, totalKw: keywords.length, matchRate: matchRate, xingzhi: xingzhi });
+                            }
                         });
 
-                        let matched = (searchMode === 'AND') ? (match === keywords.length) : (match > 0);
-                        if (matched) {
-                            const matchRate = Math.round((match / keywords.length) * 100);
-                            results.push({ ...item, matchCount: match, totalKw: keywords.length, matchRate: matchRate, xingzhi: xingzhi });
-                        }
-                    });
-
-                    results.sort((a, b) => {
-                        if (b.matchRate !== a.matchRate) return b.matchRate - a.matchRate;
-                        return new Date(b.datetime || 0) - new Date(a.datetime || 0);
-                    });
+                        results.sort((a, b) => {
+                            if (b.matchRate !== a.matchRate) return b.matchRate - a.matchRate;
+                            return new Date(b.datetime || 0) - new Date(a.datetime || 0);
+                        });
+                    }
 
                     allFilteredResults = results;
                     currentKeywords = keywords;

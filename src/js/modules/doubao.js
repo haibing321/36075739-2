@@ -4709,53 +4709,43 @@
             }
 
             /**
-             * 直接从 IndexedDB 读取检查信息
+             * 从 IndexedDB 读取检查信息（通过 dbManager 共享连接）
+             * 不再独立 open RailwayIssueDB_v2，直接复用 issue.js 已建立的连接
              */
             async function wrLoadIssuesFromDB() {
-                return new Promise((resolve, reject) => {
-                    const request = indexedDB.open('RailwayIssueDB_v2', 1);
-                    request.onerror = () => resolve([]);
-                    request.onsuccess = (e) => {
-                        const db = e.target.result;
-                        try {
-                            const tx = db.transaction(['issues'], 'readonly');
-                            const store = tx.objectStore('issues');
-                            const getAll = store.getAll();
-                            getAll.onsuccess = () => resolve(getAll.result || []);
-                            getAll.onerror = () => resolve([]);
-                        } catch (err) {
-                            resolve([]);
-                        }
-                    };
-                    request.onupgradeneeded = (e) => {
-                        e.target.result.createObjectStore('issues', { keyPath: 'id', autoIncrement: true });
-                    };
-                });
+                try {
+                    var db = await window.dbManager.getDB('RailwayIssueDB_v2');
+                    return new Promise(function(resolve) {
+                        const tx = db.transaction(['issues'], 'readonly');
+                        const store = tx.objectStore('issues');
+                        const getAll = store.getAll();
+                        getAll.onsuccess = () => resolve(getAll.result || []);
+                        getAll.onerror = () => resolve([]);
+                    });
+                } catch(err) {
+                    console.warn('[writer] 获取 IssueDB 失败:', err);
+                    return [];
+                }
             }
 
             /**
-             * 直接从 IndexedDB 读取规章制度
+             * 从 IndexedDB 读取规章制度（通过 dbManager 共享连接）
+             * 不再独立 open RailwayRuleDB，直接复用 rule.js 已建立的连接
              */
             async function wrLoadRulesFromDB() {
-                return new Promise((resolve, reject) => {
-                    const request = indexedDB.open('RailwayRuleDB', 2);
-                    request.onerror = () => resolve([]);
-                    request.onsuccess = (e) => {
-                        const db = e.target.result;
-                        try {
-                            const tx = db.transaction(['ruleCollection'], 'readonly');
-                            const store = tx.objectStore('ruleCollection');
-                            const getAll = store.getAll();
-                            getAll.onsuccess = () => resolve(getAll.result || []);
-                            getAll.onerror = () => resolve([]);
-                        } catch (err) {
-                            resolve([]);
-                        }
-                    };
-                    request.onupgradeneeded = (e) => {
-                        e.target.result.createObjectStore('ruleCollection', { keyPath: 'id', autoIncrement: true });
-                    };
-                });
+                try {
+                    var db = await window.dbManager.getDB('RailwayRuleDB');
+                    return new Promise(function(resolve) {
+                        const tx = db.transaction(['ruleCollection'], 'readonly');
+                        const store = tx.objectStore('ruleCollection');
+                        const getAll = store.getAll();
+                        getAll.onsuccess = () => resolve(getAll.result || []);
+                        getAll.onerror = () => resolve([]);
+                    });
+                } catch(err) {
+                    console.warn('[writer] 获取 RuleDB 失败:', err);
+                    return [];
+                }
             }
 
             /**

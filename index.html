@@ -98,16 +98,8 @@
         }
     })();
     </script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" onerror="console.warn('[CDN] xlsx 加载失败，导入/导出功能受限')"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js" onerror="console.warn('[CDN] pdf.js 加载失败，PDF预览功能受限')"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.4.2/mammoth.browser.min.js" onerror="console.warn('[CDN] mammoth 加载失败，Word解析功能受限')"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/fuse.js/6.6.2/fuse.min.js" onerror="console.warn('[CDN] fuse.js 加载失败，模糊搜索降级为普通搜索')"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/pinyin/2.11.0/pinyin.min.js" onerror="console.warn('[CDN] pinyin 加载失败，拼音搜索不可用')"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js" onerror="console.warn('[CDN] jszip 加载失败，备份功能受限')"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/xml-js/1.6.11/xml-js.min.js" onerror="console.warn('[CDN] xml-js 加载失败，XML转换功能受限')"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.6/purify.min.js" onerror="console.warn('[CDN] DOMPurify 加载失败，XSS防护降级为基础转义')"></script>
-    <script src="https://cdn.jsdelivr.net/npm/html-docx-js@0.3.1/dist/html-docx.js" onerror="console.warn('[CDN] html-docx 加载失败，Word导出功能受限')"></script>
 
+    <!-- CDN 脚本已移至 body 底部（defer 加载） -->
     <!-- Modular CSS -->
     <link rel="stylesheet" href="src/css/variables.css">
     <link rel="stylesheet" href="src/css/layout.css">
@@ -1196,14 +1188,25 @@
 
 
     <!-- Modular JS -->
-    <script src="src/js/modules/utils.js"></script>
-    <script src="src/js/modules/issue.js"></script>
-    <script src="src/js/modules/rule.js"></script>
-    <script src="src/js/modules/diary.js"></script>
-    <script src="src/js/modules/phone.js"></script>
-    <script src="src/js/modules/handbook.js"></script>
-    <script src="src/js/modules/swipe.js"></script>
-    <script src="src/js/modules/doubao.js"></script>
-    <script src="src/js/modules/backup.js"></script>
+    <!-- CDN 外部库（defer: 并行下载，不阻塞渲染，按文档顺序执行） -->
+    <script src="https://cdnjs.cloudflare.com/ajaxlibs/xlsx/0.18.5/xlsx.full.min.js" defer onerror="console.warn('[CDN] xlsx 加载失败')"></script>
+    <script src="https://cdnjs.cloudflare.com/ajaxlibs/pdf.js/2.16.105/pdf.min.js" defer onerror="console.warn('[CDN] pdf.js 加载失败')"></script>
+    <script src="https://cdnjs.cloudflare.com/ajaxlibs/mammoth/1.4.2/mammoth.browser.min.js" defer onerror="console.warn('[CDN] mammoth 加载失败')"></script>
+    <script src="https://cdnjs.cloudflare.com/ajaxlibs/fuse.js/6.6.2/fuse.min.js" defer onerror="console.warn('[CDN] fuse.js 加载失败')"></script>
+    <script src="https://cdnjs.cloudflare.com/ajaxlibs/pinyin/2.11.0/pinyin.min.js" defer onerror="console.warn('[CDN] pinyin 加载失败')"></script>
+    <script src="https://cdnjs.cloudflare.com/ajaxlibs/jszip/3.10.1/jszip.min.js" defer onerror="console.warn('[CDN] jszip 加载失败')"></script>
+    <script src="https://cdnjs.cloudflare.com/ajaxlibs/xml-js/1.6.11/xml-js.min.js" defer onerror="console.warn('[CDN] xml-js 加载失败')"></script>
+    <script src="https://cdnjs.cloudflare.com/ajaxlibs/dompurify/3.0.6/purify.min.js" defer onerror="console.warn('[CDN] DOMPurify 加载失败')"></script>
+    <script src="https://cdn.jsdelivr.net/npm/html-docx-js@0.3.1/dist/html-docx.js" defer onerror="console.warn('[CDN] html-docx 加载失败')"></script>
+    <!-- 本地模块（defer: 并行下载，DOM 解析后按顺序执行） -->
+    <script src="src/js/modules/utils.js" defer></script>
+    <script src="src/js/modules/issue.js" defer></script>
+    <script src="src/js/modules/rule.js" defer></script>
+    <script src="src/js/modules/diary.js" defer></script>
+    <script src="src/js/modules/phone.js" defer></script>
+    <script src="src/js/modules/handbook.js" defer></script>
+    <script src="src/js/modules/swipe.js" defer></script>
+    <script src="src/js/modules/doubao.js" defer></script>
+    <script src="src/js/modules/backup.js" defer></script>
 </body>
 </html>

@@ -738,47 +738,49 @@
             }
             window.closeMultimediaPanel = closeMultimediaPanel;
 
-            // 多媒体文件存储到 IndexedDB
+            // 多媒体文件存储到 IndexedDB（使用 dbManager 共享连接）
             function saveMediaToDB(file, captureTime) {
                 return new Promise((resolve) => {
+                    // 注册 DiaryMediaDB schema（仅一次）
+                    if (!window._diaryMediaDBRegistered) {
+                        window.dbManager.register('DiaryMediaDB', 1, function(db, e) {
+                            e.target.result.createObjectStore('media', { keyPath: 'id', autoIncrement: true });
+                        });
+                        window._diaryMediaDBRegistered = true;
+                    }
                     const reader = new FileReader();
                     reader.onload = function() {
                         const data = reader.result; // ArrayBuffer
-                        const request = indexedDB.open('DiaryMediaDB', 1);
-                        request.onupgradeneeded = e => {
-                            e.target.result.createObjectStore('media', { keyPath: 'id', autoIncrement: true });
-                        };
-                        request.onsuccess = e => {
-                            const db = e.target.result;
+                        window.dbManager.getDB('DiaryMediaDB').then(function(db) {
                             const tx = db.transaction('media', 'readwrite');
                             const store = tx.objectStore('media');
                             const addReq = store.add({ blob: data, type: file.type, name: file.name, timestamp: Date.now(), captureTime: captureTime || '' });
                             addReq.onsuccess = e => resolve(e.target.result);
                             addReq.onerror = () => resolve(null);
-                        };
-                        request.onerror = () => resolve(null);
+                        }).catch(() => resolve(null));
                     };
+                    reader.onerror = () => resolve(null);
                     reader.readAsArrayBuffer(file);
                 });
             }
             window.saveMediaToDB = saveMediaToDB;
 
-            // 从 IndexedDB 读取媒体文件
+            // 从 IndexedDB 读取媒体文件（使用 dbManager 共享连接）
             function getMediaFromDB(id) {
                 return new Promise((resolve) => {
-                    const request = indexedDB.open('DiaryMediaDB', 1);
-                    request.onupgradeneeded = e => {
-                        e.target.result.createObjectStore('media', { keyPath: 'id', autoIncrement: true });
-                    };
-                    request.onsuccess = e => {
-                        const db = e.target.result;
+                    if (!window._diaryMediaDBRegistered) {
+                        window.dbManager.register('DiaryMediaDB', 1, function(db, e) {
+                            e.target.result.createObjectStore('media', { keyPath: 'id', autoIncrement: true });
+                        });
+                        window._diaryMediaDBRegistered = true;
+                    }
+                    window.dbManager.getDB('DiaryMediaDB').then(function(db) {
                         const tx = db.transaction('media', 'readonly');
                         const store = tx.objectStore('media');
                         const getReq = store.get(id);
                         getReq.onsuccess = () => resolve(getReq.result || null);
                         getReq.onerror = () => resolve(null);
-                    };
-                    request.onerror = () => resolve(null);
+                    }).catch(() => resolve(null));
                 });
             }
 
