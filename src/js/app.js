@@ -167,11 +167,54 @@ window.onclick = function(e) {
     var _installBtn = null;
     var _installBtnAdded = false;
 
-    navigator.serviceWorker.register('sw.js').then(function() {
+    navigator.serviceWorker.register('sw.js').then(function(reg) {
         console.log('[PWA] SW 注册成功');
+
+        // 检测新版本更新
+        reg.addEventListener('updatefound', function() {
+            var sw = reg.installing;
+            sw.addEventListener('statechange', function() {
+                if (sw.state === 'installed' && navigator.controller) {
+                    // 新 SW 已安装完毕，提示用户刷新
+                    showUpdateToast();
+                }
+            });
+        });
     }).catch(function(err) {
         console.warn('[PWA] SW 注册失败:', err);
     });
+
+    // SW 更新提示 Toast
+    function showUpdateToast() {
+        if (document.getElementById('_sw_update_toast')) return;
+        var toast = document.createElement('div');
+        toast.id = '_sw_update_toast';
+        toast.innerHTML = [
+            '<span>🔄 发现新版本</span>',
+            '<button id="_sw_update_btn" style="',
+            '  background:#ffd700;color:#1a365d;border:none;border-radius:16px;',
+            '  padding:4px 14px;font-size:0.82rem;font-weight:700;cursor:pointer;margin-left:8px;',
+            '">立即更新</button>'
+        ].join('');
+        Object.assign(toast.style, {
+            position:'fixed', top:'12px', left:'50%', transform:'translateX(-50%)',
+            background:'rgba(26,54,93,0.95)', color:'#fff',
+            display:'flex', alignItems:'center', gap:'6px',
+            padding:'10px 20px', zIndex:'100000', borderRadius:'24px',
+            fontSize:'0.88rem', fontWeight:'600', boxShadow:'0 4px 16px rgba(0,0,0,.3)',
+            transition:'opacity .3s ease'
+        });
+        document.body.appendChild(toast);
+        document.getElementById('_sw_update_btn').onclick = function() {
+            // 通知 SW skipWaiting 并刷新页面
+            if (navigator.serviceWorker.controller) {
+                navigator.serviceWorker.controller.postMessage({ type: 'SKIP_WAITING' });
+            }
+            window.location.reload();
+        };
+        // 30秒后自动消失
+        setTimeout(function() { toast.style.opacity = '0'; setTimeout(function() { if (toast.parentNode) toast.parentNode.removeChild(toast); }, 310); }, 30000);
+    }
 
     window.addEventListener('beforeinstallprompt', function(e) {
         if (localStorage.getItem('pwa_install_dismissed') === '1') return;

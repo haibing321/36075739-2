@@ -38,10 +38,12 @@
                 nav.classList.remove('nav-open');
                 toggle.classList.remove('open');
                 toggle.setAttribute('aria-label', '展开导航菜单');
+                toggle.setAttribute('aria-expanded', 'false');
             } else {
                 nav.classList.add('nav-open');
                 toggle.classList.add('open');
                 toggle.setAttribute('aria-label', '收起导航菜单');
+                toggle.setAttribute('aria-expanded', 'true');
             }
         };
 
@@ -50,6 +52,9 @@
         const _tabHistory = []; // 最近5次切换记录 [{from, to, label}]
 
         window.switchTab = function(tab, fromSwipe) {
+            // 性能埋点
+            if (window.perfMonitor) perfMonitor.start('tab_switch');
+
             // 记录历史（侧滑或手动切换都记录）
             const prevActiveBtn = document.querySelector('.nav-btn.active');
             let prevTab = null;
@@ -61,10 +66,20 @@
                 _tabHistory.push({ from: prevTab, to: tab, label: TAB_LABELS[tab] || tab });
                 if (_tabHistory.length > 5) _tabHistory.shift();
             }
-            document.querySelectorAll('.nav-btn').forEach(t => t.classList.remove('active'));
-            document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
-            document.getElementById('tab-' + tab).classList.add('active');
-            document.getElementById('panel-' + tab).classList.add('active');
+            document.querySelectorAll('.nav-btn').forEach(function(t) {
+                t.classList.remove('active');
+                t.setAttribute('aria-selected', 'false');
+            });
+            document.querySelectorAll('.panel').forEach(function(p) {
+                p.classList.remove('active');
+            });
+            var activeBtn = document.getElementById('tab-' + tab);
+            if (activeBtn) {
+                activeBtn.classList.add('active');
+                activeBtn.setAttribute('aria-selected', 'true');
+            }
+            var activePanel = document.getElementById('panel-' + tab);
+            if (activePanel) activePanel.classList.add('active');
             // 更新移动端当前Tab标签
             const labelEl = document.getElementById('navCurrentLabel');
             if (labelEl) labelEl.textContent = TAB_LABELS[tab] || '';
@@ -80,6 +95,7 @@
             // if (fromSwipe) {
             //     _showSwipeToast(tab);
             // }
+            if (window.perfMonitor) perfMonitor.end('tab_switch', { targetTab: tab });
         };
 
         window.closeModal = function(id) { 

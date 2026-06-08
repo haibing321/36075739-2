@@ -292,6 +292,7 @@
             }
 
             window.issueDoSearch = async function() {
+                if (window.perfMonitor) perfMonitor.start('search_issue');
                 const keywords = [];
                 for (let i = 1; i <= keywordNum; i++) {
                     const val = document.getElementById('issue-input_' + i)?.value.trim();
@@ -347,6 +348,7 @@
                     totalPages = Math.ceil(highMatch.length / pageSize) || 1;
                     currentPage = 1;
                     issueDisplayResults(highMatch, lowMatch, keywords);
+                    if (window.perfMonitor) perfMonitor.end('search_issue', { resultCount: results.length });
                 }, 50);
             };
 
