@@ -213,29 +213,53 @@
         pushEntry(createEntry('cdn', {
             message: (tag.toUpperCase() + ' 加载失败: ') + libName,
             source: src,
-            detail: '资源类型: ' + tag + ' | 可能原因: 网络不可达 / CDN 被墙 / DNS 解析失败'
+            detail: '资源类型: ' + tag + ' | 可能原因: 网络不可达 / CDN 被墙 / DNS 解析失败 / CSP 拦截'
         }));
 
-        // 同时显示用户可见的 Toast 提示
-        showCdnErrorToast(libName);
+        // 同时显示用户可见的 Toast 提示（带 URL 便于诊断）
+        showCdnErrorToast(libName, src);
     }
 
     /**
-     * 从 URL 中提取库名称用于友好展示
+     * 从 URL 中提取资源名称用于友好展示
      */
     function extractLibName(url) {
         if (!url) return '未知资源';
-        var match = url.match(/\/([^/]+)\.(min\.)?js/);
+        // CDN JS 库: /xxx.min.js 或 /xxx.js
+        var match = url.match(/\/([^/]+?)\.min\.js$/);
         if (match) return match[1];
-        match = url.match(/\/([^/]+)\.(min\.)?css/);
+        match = url.match(/\/([^/]+?)\.js(\?|$)/);
         if (match) return match[1];
-        return url.split('/').pop().split('?')[0] || '未知';
+        // CSS 文件
+        match = url.match(/\/([^/]+?)\.css(\?|$)/);
+        if (match) return match[1] + '(CSS)';
+        // 图片
+        match = url.match(/\/([^/]+?)\.(png|svg|ico|webp|jpg|gif)(\?|$)/i);
+        if (match) return match[1] + '.' + match[2] + '(图)';
+        // 字体
+        match = url.match(/\/([^/]+?)\.(woff2?|ttf|eot)(\?|$)/i);
+        if (match) return match[1] + '.' + match[2] + '(字体)';
+        // manifest / 其他文件
+        var name = url.split('/').pop().split('?')[0];
+        return name || '未知资源';
+    }
+
+    /**
+     * 获取用于显示的短 URL（去掉协议和域名）
+     */
+    function shortUrlForDisplay(fullUrl) {
+        try {
+            var u = new URL(fullUrl);
+            return u.pathname + (u.search ? u.search : '');
+        } catch(e) {
+            return fullUrl.length > 60 ? fullUrl.substring(0, 60) + '...' : fullUrl;
+        }
     }
 
     /**
      * CDN 加载失败的用户提示 Toast
      */
-    function showCdnErrorToast(libName) {
+    function showCdnErrorToast(libName, url) {
         // 防止短时间内重复弹出（同一库只提示一次，冷却期 30 秒）
         var toastKey = '_cdn_toast_' + (libName || 'unknown');
         if (window[toastKey]) return;
@@ -252,9 +276,11 @@
                 fontSize: '0.85rem', fontWeight: '600',
                 boxShadow: '0 4px 16px rgba(220,38,38,.4)',
                 display: 'flex', alignItems: 'center', gap: '6px',
-                fontFamily: '-apple-system, "Microsoft YaHei", sans-serif'
+                fontFamily: '-apple-system, "Microsoft YaHei", sans-serif',
+                maxWidth: '520px', flexWrap: 'wrap'
             });
-            toast.innerHTML = '<span>⚠️ ' + escapeHtml(libName) + ' 未加载，请检查网络后刷新</span>';
+            var urlHint = url ? '<span style="opacity:0.7;font-weight:400;font-size:0.78rem;margin-left:4px;">(' + escapeHtml(shortUrlForDisplay(url)) + ')</span>' : '';
+            toast.innerHTML = '<span>⚠️ ' + escapeHtml(libName) + ' 未加载，请检查网络后刷新</span>' + urlHint;
             document.body.appendChild(toast);
 
             setTimeout(function() {

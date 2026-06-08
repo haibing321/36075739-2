@@ -14,9 +14,9 @@
     <!-- 内容安全策略（渐进式加固） -->
     <meta http-equiv="Content-Security-Policy"
           content="default-src 'self';
-                   script-src 'self' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net 'unsafe-inline';
+                   script-src 'self' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net 'unsafe-inline' 'unsafe-eval';
                    style-src 'self' 'unsafe-inline';
-                   connect-src 'self' https://api.deepseek.com;
+                   connect-src 'self' https://api.deepseek.com https://api.open-meteo.com https://geocoding-api.open-meteo.com https://api.allorigins.win https://api.duckduckgo.com;
                    img-src 'self' blob: data:;
                    frame-src https://www.doubao.com;
                    font-src 'self';
