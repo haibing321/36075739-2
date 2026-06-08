@@ -478,7 +478,7 @@
                 var currentKey = dsApiKey || '';
                 document.getElementById('modal-apikey').value = currentKey;
                 document.getElementById('modal-apikey').type = currentKey ? 'text' : 'password';
-                document.getElementById('api-config-modal').style.display = 'flex';
+                document.getElementById('api-config-modal').style.display = 'block';
             }
 
             async function saveApiConfigFromModal() {
