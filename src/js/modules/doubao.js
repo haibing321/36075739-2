@@ -3005,7 +3005,8 @@
                     console.log('[AI对规] 历史案例召回', issueCandidates.length, '条');
                 } catch (e) {
                     console.error('[AI对规] 召回候选条款异常:', e);
-                    container.innerHTML = '<div style="padding:16px;color:#dc2626;background:#fef2f2;border-radius:8px;border-left:4px solid #ef4444;"><strong>❌ 召回候选条款失败：' + e.message + '</strong><br><span style="font-size:0.82rem;color:#991b1b;">' + (e.stack||'').slice(0,500) + '</span></div>';
+                    var _escErr = typeof window.escapeHtml === 'function' ? window.escapeHtml : function(s){return String(s).replace(/</g,'&lt;');};
+                    container.innerHTML = '<div style="padding:16px;color:#dc2626;background:#fef2f2;border-radius:8px;border-left:4px solid #ef4444;"><strong>❌ 召回候选条款失败：' + _escErr(e.message) + '</strong><br><span style="font-size:0.82rem;color:#991b1b;">' + _escErr((e.stack||'').slice(0,500)) + '</span></div>';
                     return;
                 }
 
@@ -4140,7 +4141,7 @@
                             tag.style.cssText = 'display:inline-flex;align-items:center;gap:6px;padding:4px 10px;background:#e6f7ff;border:1px solid #91d5ff;border-radius:16px;font-size:0.78rem;color:#0050b3;';
                             const idx = window._wrUploadedFiles.length - 1;
                             const icon = ext === 'pdf' ? '📕' : ext === 'docx' || ext === 'doc' ? '📘' : ext === 'xlsx' || ext === 'xls' ? '📊' : '📄';
-                            tag.innerHTML = icon + ' ' + file.name
+                            tag.innerHTML = icon + ' ' + (typeof window.escapeHtml === 'function' ? window.escapeHtml(file.name) : String(file.name).replace(/</g,'&lt;'))
                                 + ' <button onclick="wrRemoveUploadedFile(' + idx + ',this.parentElement)" style="background:none;border:none;cursor:pointer;color:#999;font-size:0.95rem;padding:0;line-height:1;margin-left:2px;">×</button>';
                             tagsEl.appendChild(tag);
                         }
@@ -6806,14 +6807,18 @@ ${details || '(无)'}
           });
           const data = await resp.json();
           const conclusion = data.choices && data.choices[0] && data.choices[0].message ? data.choices[0].message.content : '无响应';
+          // 使用 safeHtml 防止 AI 返回内容中的 XSS（如恶意 <script> / <img onerror> 等）
+          var _safeConclusion = typeof window.safeHtml === 'function'
+            ? window.safeHtml(conclusion, { allowedTags: ['br','div','h3','p','strong','em','b','i','span','ul','ol','li','pre','code','blockquote'] })
+            : window.escapeHtml(conclusion).replace(/\n/g, '<br>');
           const html = '<div style="background:#f0f9ff;padding:16px;border-radius:12px;border-left:5px solid #2563eb;">' +
             '<h3>⚖️ 对规结论</h3>' +
-            '<div style="margin:10px 0;white-space:pre-wrap;">' + conclusion.replace(/\n/g, '<br>') + '</div>' +
+            '<div style="margin:10px 0;white-space:pre-wrap;">' + _safeConclusion + '</div>' +
             '<div style="font-size:0.8rem;color:#059669;">✅ 引用规章 ' + rules.length + ' 条，历史案例 ' + issues.length + ' 条</div>' +
             '</div>';
           if (container) container.innerHTML = html;
         } catch(e) {
-          if (container) container.innerHTML = '<div style="color:red">对规失败：' + e.message + '</div>';
+          if (container) container.innerHTML = '<div style="color:red">对规失败：' + (typeof window.escapeHtml === 'function' ? window.escapeHtml(e.message) : String(e.message).replace(/</g,'&lt;')) + '</div>';
         }
       };
 

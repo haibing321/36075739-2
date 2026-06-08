@@ -171,7 +171,9 @@
                     displayItem.textContent = it;
                     displaySubItem.textContent = '';
                     displaySubItem.style.display = 'none';
-                    displayContent.innerHTML = content.replace(/\n/g, '<br>');
+                    displayContent.innerHTML = typeof window.safeHtml === 'function'
+                        ? window.safeHtml(content, { allowedTags: ['br','p','div','span','strong','em','b','i','u','h1','h2','h3','h4','table','tr','td','th','ul','ol','li'] })
+                        : window.escapeHtml(content).replace(/\n/g, '<br>');
                     contentDisplay.style.display = 'block';
                     return;
                 }
@@ -199,7 +201,9 @@
                 displayItem.textContent = it;
                 displaySubItem.textContent = sub;
                 displaySubItem.style.display = '';
-                displayContent.innerHTML = content.replace(/\n/g, '<br>');
+                displayContent.innerHTML = typeof window.safeHtml === 'function'
+                    ? window.safeHtml(content, { allowedTags: ['br','p','div','span','strong','em','b','i','u','h1','h2','h3','h4','table','tr','td','th','ul','ol','li'] })
+                    : window.escapeHtml(content).replace(/\n/g, '<br>');
                 contentDisplay.style.display = 'block';
             };
 

@@ -291,7 +291,7 @@
                     renderDateDetail(date);
                 }
             };
-            function escapeHtml(text) { return String(text).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+            // escapeHtml 已统一到 utils.js (window.escapeHtml)，此处不再重复定义
 
             // 更新记录数显示
             function updateDiaryCount() {

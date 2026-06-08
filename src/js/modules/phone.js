@@ -124,7 +124,7 @@
                 phoneDoSearch();
             };
 
-            function escapeHtml(text) { if (!text) return ''; return String(text).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+            // escapeHtml 已统一到 utils.js (window.escapeHtml)，此处不再重复定义
 
             window.phoneHandleFile = async function(e) {
                 const file = e.target.files[0];

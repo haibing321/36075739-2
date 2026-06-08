@@ -124,3 +124,83 @@
             return (str || '').replace(/\D/g, '');
         }
 
+        // ============================================================
+        // 统一安全函数（XSS 防护）
+        // ============================================================
+
+        /**
+         * HTML 实体转义 — 统一版本，替代各模块重复实现
+         * 覆盖: diary.js:294, phone.js:127, rule.js:427 的本地副本
+         * 用法: window.escapeHtml('<script>alert(1)</script>')
+         * 返回: '&lt;script&gt;alert(1)&lt;/script&gt;'
+         */
+        window.escapeHtml = function(text) {
+            if (text === null || text === undefined) return '';
+            return String(text)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+        };
+
+        /**
+         * 安全 HTML 渲染 — DOMPurify 包装 + 降级回退
+         *
+         * 优先使用 DOMPurify（允许安全的 HTML 标签如 <br><strong> 等），
+         * 若 CDN 加载失败则降级为纯转义（所有标签都变文本）。
+         *
+         * @param {string} dirty - 可能包含恶意 HTML 的字符串
+         * @param {object} [options] - 传给 DOMPurify.sanitize 的选项
+         *   - allowedTags: 允许的标签白名单（默认：常用安全标签）
+         *   - allowedAttributes: 允许的属性白名单
+         *   - forceEscape: true 时强制纯文本模式（不保留任何HTML标签）
+         * @returns {string} 安全的 HTML 字符串，可直接赋值给 innerHTML
+         *
+         * 用法示例:
+         *   el.innerHTML = safeHtml(userContent);              // 默认允许 br/b/strong/i/em/p
+         *   el.innerHTML = safeHtml(aiResponse, {forceEscape:true}); // 纯文本模式
+         *   el.innerHTML = safeHtml(markdown, {allowedTags:['br','h3','div','pre','code']});
+         */
+        window.safeHtml = function(dirty, options) {
+            if (dirty === null || dirty === undefined) return '';
+
+            // 强制纯文本模式（不信任任何HTML标签）
+            if (options && options.forceEscape) {
+                return window.escapeHtml(dirty);
+            }
+
+            // DOMPurify 可用时使用完整 sanitize
+            if (typeof DOMPurify !== 'undefined' && DOMPurify.sanitize) {
+                try {
+                    var purifyOptions = {
+                        ALLOWED_TAGS: ['b', 'i', 'em', 'strong', 'p', 'br', 'span',
+                                        'h1','h2','h3','h4','h5','h6',
+                                        'ul','ol','li','blockquote',
+                                        'pre','code','div',
+                                        'table','thead','tbody','tr','th','td',
+                                        'a', 'img', 'hr', 'sub', 'sup', 'mark'],
+                        ALLOWED_ATTR: ['href', 'src', 'alt', 'title', 'class', 'style',
+                                       'id', 'target', 'rel', 'data-*'],
+                        ADD_ATTR: ['target'],
+                        FORCE_BODY: false
+                    };
+                    // 合并用户自定义选项
+                    if (options) {
+                        if (options.allowedTags) purifyOptions.ALLOWED_TAGS = options.allowedTags;
+                        if (options.allowedAttributes) purifyOptions.ALLOWED_ATTR = options.allowedAttributes;
+                        if (options.allowHref) purifyOptions.ALLOWED_ATTR.push('href');
+                    }
+                    return DOMPurify.sanitize(dirty, purifyOptions);
+                } catch(e) {
+                    console.warn('[safeHtml] DOMPurify sanitize 失败，降级为转义:', e.message);
+                }
+            }
+
+            // 降级方案：CDN 未加载或异常时，全部转义为纯文本
+            // 保留换行符转为 <br>（这是最常见的安全需求）
+            var escaped = window.escapeHtml(dirty);
+            return escaped.replace(/\n/g, '<br>');
+        };
+
+

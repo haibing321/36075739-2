@@ -424,7 +424,7 @@
                 }
             }
 
-            function escapeHtml(unsafe) { return unsafe.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;'); }
+            // escapeHtml 已统一到 utils.js (window.escapeHtml)，此处不再重复定义
             function escapeRegExp(string) { return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
             function highlightKeywords(text, keywords) {
                 if (!keywords || keywords.length === 0) return escapeHtml(text);
