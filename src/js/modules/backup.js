@@ -98,8 +98,132 @@
         alert(msg);
     }
 
+    /**
+     * 通用文件下载函数，兼容所有浏览器（含华为浏览器 / Edge / Safari / 微信 / iOS 等）
+     * 解决华为浏览器以下问题：
+     *   - 不支持程序化 a.click() 下载
+     *   - ZIP 文件必须设置正确 MIME type
+     *   - 手机端手势丢失后下载失效
+     *   - 需要回退到可见的下载按钮
+     */
+    function downloadBlob(blob, filename) {
+        // 确保ZIP文件有正确的MIME类型（华为等浏览器对此更严格）
+        if (filename.endsWith('.zip') && (!blob.type || blob.type === '' || blob.type === 'application/octet-stream')) {
+            blob = new Blob([blob], { type: 'application/zip' });
+        }
+
+        // 方案1: msSaveOrOpenBlob（EdgeHTML / 新版Edge部分版本 / 华为部分旧版内核）
+        if (window.navigator && window.navigator.msSaveOrOpenBlob) {
+            try { window.navigator.msSaveOrOpenBlob(blob, filename); return; } catch(e) {}
+        }
+        // 方案2: msSaveBlob（IE / 旧Edge）
+        if (window.navigator && window.navigator.msSaveBlob) {
+            try { window.navigator.msSaveBlob(blob, filename); return; } catch(e) {}
+        }
+
+        var url = URL.createObjectURL(blob);
+        var isMobile = /Mobi|Android|HuaweiBrowser|HMS/i.test(navigator.userAgent);
+        var isComplex = filename.endsWith('.zip') || filename.endsWith('.docx') || filename.endsWith('.xlsx');
+
+        if (isMobile && isComplex) {
+            // === 华为手机端 + ZIP/DOCX/XLSX：显示手动点击的下载按钮 ===
+            showMobileDownloadBtn(url, filename);
+        } else {
+            // === 桌面端 / 手机端简单格式（JSON/TXT）：标准 a.click() ===
+            var a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            a.style.display = 'none';
+            document.body.appendChild(a);   // 必须：华为浏览器要求元素在DOM树中才能触发下载
+            a.click();
+            setTimeout(function() {
+                if (a.parentNode) document.body.removeChild(a);
+                setTimeout(function() { URL.revokeObjectURL(url); }, 60000);
+            }, isMobile ? 2000 : 500);
+        }
+    }
+
+    /**
+     * 显示移动端下载按钮（当 a.click() 在手机上不可靠时使用）
+     */
+    function showMobileDownloadBtn(url, filename) {
+        // 移除旧按钮
+        var old = document.getElementById('_mobile_dl_btn');
+        if (old && old.parentNode) old.parentNode.removeChild(old);
+
+        var displayName = filename.length > 30 ? filename.slice(0, 27) + '...' : filename;
+
+        var btn = document.createElement('a');
+        btn.id = '_mobile_dl_btn';
+        btn.href = url;
+        btn.download = filename;
+        btn.innerHTML = '<span style="font-size:1.3rem;vertical-align:middle;">📥</span> 下载: ' + displayName;
+        btn.style.cssText = [
+            'display:block;position:fixed;bottom:80px;left:50%;',
+            'transform:translateX(-50%);',
+            'background:linear-gradient(135deg,#059669,#10b981);',
+            'color:#fff;padding:14px 28px;border-radius:25px;',
+            'text-decoration:none;font-size:0.95rem;font-weight:600;',
+            'z-index:99999;box-shadow:0 4px 20px rgba(5,150,105,0.4);',
+            'white-space:nowrap;animation:_mbdlFadeIn .3s ease;'
+        ].join('');
+
+        // 注入动画样式（仅一次）
+        if (!document.getElementById('_mbdl_style')) {
+            var s = document.createElement('style');
+            s.id = '_mbdl_style';
+            s.textContent = '@keyframes _mbdlFadeIn{from{opacity:0;transform:translateX(-50%) translateY(20px);}to{opacity:1;transform:translateX(-50%) translateY(0);}}';
+            document.head.appendChild(s);
+        }
+
+        document.body.appendChild(btn);
+
+        // 15秒后自动移除（比 rule.js 更长，给用户足够时间点击）
+        setTimeout(function() {
+            if (btn.parentNode) btn.parentNode.removeChild(btn);
+            setTimeout(function() { URL.revokeObjectURL(url); }, 30000);
+        }, 15000);
+    }
+
+    /**
+     * 安全触发文件选择器（兼容华为浏览器等移动端）
+     * 关键修复：input 必须在 DOM 树中才能在华为浏览器正常弹出选择对话框
+     */
+    function triggerFileInput(accept, callback) {
+        var input = document.createElement('input');
+        input.type = 'file';
+        input.accept = accept || '*/*';
+        input.style.cssText = 'position:fixed;left:-9999px;top:-9999px;opacity:0;width:0;height:0;'; // 隐藏但在DOM中
+
+        // 必须添加到 DOM —— 华为浏览器不在此 DOM 中则 click() 无效
+        document.body.appendChild(input);
+
+        input.onchange = function(e) {
+            callback(e);
+            // 延迟清理：确保事件处理完成后再移除
+            setTimeout(function() {
+                if (input.parentNode) document.body.removeChild(input);
+            }, 100);
+        };
+
+        // 用户取消时也需清理
+        input.addEventListener('cancel', function() {
+            setTimeout(function() {
+                if (input.parentNode) document.body.removeChild(input);
+            }, 100);
+        }, { once: true });
+
+        // 使用 requestAnimationFrame 确保 DOM 已更新后再触发 click（解决部分浏览器的时序问题）
+        requestAnimationFrame(function() {
+            try { input.click(); } catch(err) {
+                console.warn('[backup] input.click() 失败，尝试重试:', err.message);
+                setTimeout(function() { try { input.click(); } catch(e2) { /* 最终放弃 */ } }, 50);
+            }
+        });
+    }
+
     window.oneClickBackup = async function() {
-        if (typeof JSZip === 'undefined') { _toast('JSZip 未加载，请刷新后重试', true); return; }
+        if (typeof JSZip === 'undefined') { _toast('JSZip 未加载，请检查网络后刷新重试', true); return; }
         _toast('正在收集数据…');
         var backup = { version: 3, exportDate: new Date().toISOString(), modules: {} };
         try {
@@ -151,28 +275,28 @@
             var zip = new JSZip();
             zip.file('full_backup.json', JSON.stringify(backup, null, 2));
             var blob = await zip.generateAsync({ type: 'blob' });
-            var url = URL.createObjectURL(blob);
-            var a = document.createElement('a');
-            a.href = url;
-            a.download = '安监系统备份_' + new Date().toISOString().slice(0,19).replace(/:/g,'-') + '.zip';
-            a.click();
-            setTimeout(function(){ URL.revokeObjectURL(url); }, 5000);
-            _toast('备份完成' + (mediaFileCount > 0 ? ' · 含' + mediaFileCount + '个附件(' + (mediaTotalBytes/1024/1024).toFixed(1) + 'MB原始)' : ''));
+            var fileName = '安监系统备份_' + new Date().toISOString().slice(0,19).replace(/:/g,'-') + '.zip';
+
+            // 使用兼容性下载函数（替代原来的简单 a.click()）
+            downloadBlob(blob, fileName);
+
+            _toast('备份完成' + (mediaFileCount > 0 ? ' · 含' + mediaFileCount + '个附件(' + (mediaTotalBytes/1024/1024).toFixed(1) + 'MB原始)' : '') +
+                   '\n若未自动下载，请点击屏幕下方绿色按钮');
         } catch(e) { _toast('备份失败：' + e.message, true); }
     };
 
     window.oneClickRestore = function() {
-        if (typeof JSZip === 'undefined') { _toast('JSZip 未加载', true); return; }
-        var input = document.createElement('input');
-        input.type = 'file'; input.accept = '.zip';
-        input.onchange = async function(e){
+        if (typeof JSZip === 'undefined') { _toast('JSZip 未加载，请检查网络后刷新重试', true); return; }
+        // 使用兼容华为浏览器的文件选择器（input 必须在 DOM 中 + cancel 监听）
+        triggerFileInput('.zip', async function(e) {
             var file = e.target.files[0]; if (!file) return;
             try {
+                _toast('正在解析备份文件…');
                 var zip = await JSZip.loadAsync(file);
                 var backupFile = zip.file('full_backup.json');
-                if (!backupFile) throw new Error('缺少 full_backup.json');
+                if (!backupFile) throw new Error('缺少 full_backup.json，可能不是有效的安系统备份文件');
                 var backup = JSON.parse(await backupFile.async('string'));
-                if (backup.version !== 2 && backup.version !== 3) throw new Error('版本不兼容（仅支持v2/v3）');
+                if (backup.version !== 2 && backup.version !== 3) throw new Error('版本不兼容（仅支持v2/v3，当前文件v' + (backup.version||'未知') + '）');
                 if (!confirm('⚠️ 将覆盖现有数据，确定继续？')) return;
 
                 _toast('正在恢复数据…');
@@ -271,9 +395,7 @@
                     setTimeout(function(){ location.reload(); }, 2000);
                 }, 1000);
             } catch(err) { _toast('恢复失败：' + err.message, true); }
-            input.remove();
-        };
-        input.click();
+        });
     };
 
     function bind() {
