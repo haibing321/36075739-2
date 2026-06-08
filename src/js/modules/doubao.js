@@ -45,9 +45,55 @@
             let _globalCandidatesMap = {};
             let _acAbortController = null; // 用于停止AI对规生成
 
+            /**
+             * 获取 API Key（统一入口，自动处理加密/明文/缓存）
+             * @returns {Promise<string>} 明文 API Key（空字符串表示无 Key）
+             *
+             * 优先级：
+             *   1. 内存缓存 dsApiKey（最快）
+             *   2. cryptoCache（utils.js 解密缓存）
+             *   3. localStorage 明文直读
+             *   4. 触发解密弹窗 → 异步解密
+             */
+            async function _getApiKey() {
+                // 1. 内存中有明文，直接返回
+                if (dsApiKey) return dsApiKey;
+
+                // 2. 检查 utils.js 的解密缓存
+                if (typeof window.getDecryptedApiKey === 'function') {
+                    var decrypted = await window.getDecryptedApiKey(DS_API_KEY_STORAGE);
+                    if (decrypted) { dsApiKey = decrypted; return decrypted; }
+                }
+
+                // 3. 最后尝试 localStorage 明文（兼容旧格式）
+                var raw = localStorage.getItem(DS_API_KEY_STORAGE) || '';
+                if (raw && !window.isEncryptedValue(raw)) { dsApiKey = raw; return raw; }
+
+                return '';
+            }
+
             // ---- 初始化 ----
             function dsInit() {
-                dsApiKey = localStorage.getItem(DS_API_KEY_STORAGE) || '';
+                var _rawKey = localStorage.getItem(DS_API_KEY_STORAGE) || '';
+                // 检测是否为加密格式（JSON {e:1,d:...}）
+                if (_rawKey && typeof window.isEncryptedValue === 'function' && window.isEncryptedValue(_rawKey)) {
+                    // 加密格式：暂不加载明文，标记需要解锁
+                    dsApiKey = '';
+                    console.log('[doubao] API Key 已加密，将在首次使用时提示输入口令');
+                    // 尝试异步解密（不阻塞初始化）
+                    if (typeof window.getDecryptedApiKey === 'function') {
+                        window.getDecryptedApiKey(DS_API_KEY_STORAGE).then(function(decrypted) {
+                            if (decrypted) { dsApiKey = decrypted; updateApiStatusBadge(); }
+                        }).catch(function(){});
+                    }
+                } else {
+                    // 明文格式：直接加载
+                    dsApiKey = _rawKey;
+                    // 检测到明文 sk- Key 且支持加密 → 后台提示升级（非阻塞）
+                    if (_rawKey && _rawKey.startsWith('sk-') && typeof window.isCryptoSupported === 'function' && window.isCryptoSupported()) {
+                        console.log('[doubao] 💡 检测到明文 API Key，建议在设置中重新保存以启用加密');
+                    }
+                }
                 dsApiUrl = localStorage.getItem(DS_API_URL_STORAGE) || DS_DEFAULT_API_URL;
                 dsModel  = localStorage.getItem(DS_MODEL_STORAGE) || DS_DEFAULT_MODEL;
                 
@@ -470,7 +516,7 @@
                 document.getElementById('api-config-modal').style.display = 'flex';
             }
 
-            function saveApiConfigFromModal() {
+            async function saveApiConfigFromModal() {
                 var url = document.getElementById('modal-apiurl').value.trim();
                 var model = document.getElementById('modal-model').value.trim();
                 var key = document.getElementById('modal-apikey').value.trim();
@@ -478,8 +524,20 @@
                 if (!model) { alert('请输入模型名称'); return; }
                 // 优先使用新输入的 key，若未填则保留已有 key
                 if (key) {
-                    dsApiKey = key;
-                    localStorage.setItem(DS_API_KEY_STORAGE, key);
+                    // 使用加密存储（如果可用）
+                    if (typeof window.saveEncryptedApiKey === 'function') {
+                        try {
+                            await window.saveEncryptedApiKey(key, DS_API_KEY_STORAGE);
+                            dsApiKey = key;
+                        } catch(e) {
+                            console.warn('[doubao] 加密保存失败，降级为明文:', e.message);
+                            localStorage.setItem(DS_API_KEY_STORAGE, key);
+                            dsApiKey = key;
+                        }
+                    } else {
+                        localStorage.setItem(DS_API_KEY_STORAGE, key);
+                        dsApiKey = key;
+                    }
                 } else if (!dsApiKey) {
                     alert('请输入 API Key');
                     return;
@@ -497,6 +555,8 @@
                 localStorage.removeItem(DS_API_KEY_STORAGE);
                 localStorage.removeItem(DS_API_URL_STORAGE);
                 localStorage.removeItem(DS_MODEL_STORAGE);
+                // 清除加密缓存
+                if (typeof window.clearCryptoCache === 'function') window.clearCryptoCache();
                 document.getElementById('modal-apiurl').value = DS_DEFAULT_API_URL;
                 document.getElementById('modal-model').value = DS_DEFAULT_MODEL;
                 document.getElementById('modal-apikey').value = '';
@@ -1044,7 +1104,7 @@
                 //     return;
                 // }
 
-                const key = dsApiKey || localStorage.getItem(DS_API_KEY_STORAGE) || '';
+                const key = dsApiKey || await _getApiKey();
                 if (!key || key === DS_PLACEHOLDER_KEY) {
                     dsAppendMsg('system', '⚠️ 请先配置 DeepSeek API Key（在上方输入框中输入并点击「保存」）。\n\n如需申请 API Key，请访问：https://platform.deepseek.com/');
                     return;
@@ -2882,7 +2942,7 @@
                 const input = document.getElementById('autoCheck-input');
                 const query = input.value.trim();
                 if (!query) { alert('请输入检查问题描述'); return; }
-                const apiKey = localStorage.getItem(DS_API_KEY_STORAGE) || '';
+                const apiKey = await _getApiKey();
                 if (!apiKey) {
                     const ok = confirm('未配置 DeepSeek API Key，是否打开 API 配置？\n点击确定打开配置弹窗，点击取消则改用本地匹配。');
                     if (ok) showApiConfigModal();
@@ -2926,7 +2986,7 @@
                 const input = document.getElementById('autoCheck-input');
                 const query = input.value.trim();
                 if (!query) { alert('请输入检查问题描述'); return; }
-                const apiKey = localStorage.getItem(DS_API_KEY_STORAGE) || '';
+                const apiKey = await _getApiKey();
                 const apiUrl = localStorage.getItem(DS_API_URL_STORAGE) || DS_DEFAULT_API_URL;
                 const model  = localStorage.getItem(DS_MODEL_STORAGE) || DS_DEFAULT_MODEL;
 
@@ -5145,7 +5205,7 @@
             window.wrGenerate = async function() {
                 const q = (document.getElementById('wr-query-input') || {}).value || '';
                 if (!q.trim()) { alert('请输入写作需求'); return; }
-                const apiKey = localStorage.getItem(WR_API_KEY_K) || '';
+                const apiKey = await _getApiKey();
                 const apiUrl = localStorage.getItem(WR_API_URL_K) || 'https://api.deepseek.com/chat/completions';
                 const model  = localStorage.getItem(WR_MODEL_K) || 'deepseek-chat';
                 if (!apiKey) { alert('请先在智能助手模块中配置 API Key。'); return; }
@@ -6782,7 +6842,7 @@ ${details || '(无)'}
         }
         const { rules, issues } = await retrieveLocalData(problemText, { topNRules: 4, topNIssues: 4 });
         const refText = buildReferenceText(rules, issues);
-        const apiKey = localStorage.getItem('ds_api_key_v1') || '';
+        const apiKey = await (typeof _getApiKey === 'function' ? _getApiKey() : Promise.resolve(localStorage.getItem('ds_api_key_v1') || ''));
         const apiUrl = localStorage.getItem('ds_api_url_v1') || 'https://api.deepseek.com/chat/completions';
         const model = localStorage.getItem('ds_model_v1') || 'deepseek-chat';
         if (!apiKey) {
