@@ -4,7 +4,7 @@
  */
 
 var CACHE_PREFIX = 'aj-v';
-var CACHE_VERSION = '1';
+var CACHE_VERSION = '2';
 var CACHE_NAME = CACHE_PREFIX + CACHE_VERSION;
 
 // ========== 预缓存资源列表（App Shell）==========
@@ -26,7 +26,8 @@ var LOCAL_PATTERNS = [
 // CDN 域名
 var CDN_HOSTS = [
   'cdnjs.cloudflare.com',
-  'cdn.jsdelivr.net'
+  'cdn.jsdelivr.net',
+  'unpkg.com'
 ];
 
 // ========== 缓存策略配置 ==========
@@ -150,23 +151,24 @@ self.addEventListener('fetch', function(event) {
     return;
   }
 
-  // 2. CDN 资源：CacheFirst（7天过期）
+  // 2. CDN 资源：CacheFirst（7天过期，跳过缓存的非200响应）
   if (isCDN(url)) {
     event.respondWith(
       caches.match(req).then(function(cached) {
-        if (cached) {
-          // 检查是否过期（7天）
+        // 有缓存时检查：状态码必须为 2xx 且未过期
+        if (cached && cached.ok) {
           var dateHeader = cached.headers.get('sw-cache-time');
           if (dateHeader) {
             var age = Date.now() - parseInt(dateHeader, 10);
             if (age < 7 * 24 * 60 * 60 * 1000) {
               return cached;
             }
+            // 已过期，下面走网络重新获取
           } else {
-            return cached; // 无时间标记则直接使用
+            return cached; // 无时间标记且状态正常则直接使用
           }
         }
-        // 缓存未命中或已过期，走网络
+        // 缓存未命中 / 已过期 / 缓存是错误响应 → 走网络
         return fetch(req).then(function(resp) {
           if (resp.ok) {
             var respToCache = resp.clone();
@@ -183,7 +185,8 @@ self.addEventListener('fetch', function(event) {
           }
           return resp;
         }).catch(function() {
-          return cached || new Response('', { status: 404 }); // 即使过期也比404好
+          // 网络失败：只有缓存是正常响应时才降级返回
+          return (cached && cached.ok) ? cached : new Response('', { status: 404 });
         });
       })
     );
